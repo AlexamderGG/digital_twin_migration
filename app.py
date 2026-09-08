@@ -689,6 +689,9 @@ def mostrar_modelos_habitat():
     """Muestra módulo de modelado de hábitat"""
     require_permission(st, 'modelos', 'ver')
     
+    # Extraemos el usuario actual para validar los permisos del botón de entrenamiento
+    user = get_current_user(st)
+    
     st.markdown("""
     <div class="main-header">
         <h1>🧬 Modelos de Idoneidad de Hábitat</h1>
@@ -711,21 +714,31 @@ def mostrar_modelos_habitat():
             format_func=lambda x: x[1]
         )
         
+        # Agregamos los modelos híbridos a la lista de opciones
         algoritmo = st.selectbox(
             "Algoritmo",
-            options=['random_forest', 'logistic_regression', 'maxent_like'],
+            options=[
+                'random_forest', 
+                'logistic_regression', 
+                'maxent_like', 
+                'ensemble_voting', 
+                'stacking_spatial'
+            ],
             format_func=lambda x: {
                 'random_forest': '🌲 Random Forest',
                 'logistic_regression': '📊 Regresión Logística',
-                'maxent_like': '🎯 MaxEnt-like'
+                'maxent_like': '🎯 MaxEnt-like',
+                'ensemble_voting': '🤝 Híbrido: Ensemble Voting',
+                'stacking_spatial': '🧠 Híbrido: Stacking Espacial'
             }[x]
         )
         
         test_size = st.slider("Proporción de prueba", 0.1, 0.5, 0.3, 0.05)
         
+        # Validamos el permiso utilizando la variable 'user' que definimos arriba
         entrenar_btn = st.button("🚀 Entrenar Modelo", type="primary", 
                                 disabled=not AuthManager.has_permission(
-                                    get_current_user(st).permisos, 'modelos', 'ejecutar'
+                                    user.permisos, 'modelos', 'ejecutar'
                                 ))
     
     with col2:

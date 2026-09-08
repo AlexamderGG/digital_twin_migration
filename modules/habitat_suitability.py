@@ -3,10 +3,11 @@ Módulo de Modelos de Idoneidad de Hábitat
 Gemelo Digital de Corredores de Migración
 
 Implementa:
-- Modelos MaxEnt-like usando regresión logística y Random Forest
+- Modelos MaxEnt-like, Regresión Logística y Random Forest
+- Modelos Híbridos (Ensemble Voting y Stacking Neural Network)
 - Generación de pseudo-ausencias
 - Variables bioclimáticas derivadas
-- Evaluación de modelos (AUC, TSS)
+- Evaluación de modelos (AUC, TSS, Permutation Importance)
 - Proyección de idoneidad espacial
 """
 
@@ -21,12 +22,17 @@ import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point, box
 from scipy import stats
-from sklearn.ensemble import RandomForestClassifier
+import joblib
+
+# Scikit-Learn - Modelos Base
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier, StackingClassifier, HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.neural_network import MLPClassifier
+# Scikit-Learn - Utilidades
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import roc_auc_score, roc_curve, confusion_matrix
 from sklearn.preprocessing import StandardScaler
-import joblib
+from sklearn.inspection import permutation_importance
 
 from config import Config, DatabaseConnection
 
@@ -53,7 +59,9 @@ class HabitatSuitabilityModeler:
     ALGORITMOS = {
         'random_forest': 'Random Forest',
         'logistic_regression': 'Regresión Logística',
-        'maxent_like': 'MaxEnt-like (RF)'
+        'maxent_like': 'MaxEnt-like (HistGB)',
+        'ensemble_voting': 'Híbrido: Ensemble Voting',
+        'stacking_spatial': 'Híbrido: Stacking Espacial'
     }
     
     def __init__(self, id_especie: int, algoritmo: str = 'random_forest'):
@@ -209,24 +217,33 @@ class HabitatSuitabilityModeler:
             X_scaled, y, test_size=test_size, random_state=42, stratify=y
         )
         
-        # Seleccionar y entrenar modelo
-        if self.algoritmo == 'random_forest' or self.algoritmo == 'maxent_like':
-            self.model = RandomForestClassifier(
-                n_estimators=200,
-                max_depth=None,
-                min_samples_split=5,
-                min_samples_leaf=2,
-                class_weight='balanced_subsample',
-                random_state=42,
-                n_jobs=-1
+        # Inicialización de Modelos Base
+        rf = RandomForestClassifier(n_estimators=200, class_weight='balanced_subsample', random_state=42, n_jobs=-1)
+        lr = LogisticRegression(max_iter=1000, class_weight='balanced', random_state=42)
+        maxent_proxy = HistGradientBoostingClassifier(max_iter=100, random_state=42)
+
+        # Seleccionar y ensamblar algoritmo
+        if self.algoritmo == 'random_forest':
+            self.model = rf
+        elif self.algoritmo == 'logistic_regression':
+            self.model = lr
+        elif self.algoritmo == 'maxent_like':
+            self.model = maxent_proxy
+        elif self.algoritmo == 'ensemble_voting':
+            self.model = VotingClassifier(
+                estimators=[('rf', rf), ('lr', lr), ('me', maxent_proxy)],
+                voting='soft'
             )
-        else:  # logistic_regression
-            self.model = LogisticRegression(
-                max_iter=1000,
-                class_weight='balanced',
-                random_state=42
+        elif self.algoritmo == 'stacking_spatial':
+            self.model = StackingClassifier(
+                estimators=[('rf', rf), ('me', maxent_proxy)],
+                final_estimator=MLPClassifier(hidden_layer_sizes=(50,), max_iter=500, random_state=42),
+                cv=5
             )
+        else:
+            self.model = rf
         
+        # Entrenar
         self.model.fit(X_train, y_train)
         
         # Evaluar
@@ -250,18 +267,20 @@ class HabitatSuitabilityModeler:
             'variables': self.variables
         }
         
-        # Importancia de variables
-        if hasattr(self.model, 'feature_importances_'):
-            importancias = self.model.feature_importances_
-        else:
-            importancias = np.abs(self.model.coef_[0])
-            importancias = importancias / importancias.sum()
+        # Importancia de variables mediante Permutación (Universal para modelos híbridos y de caja negra)
+        importancia_raw = permutation_importance(self.model, X_test, y_test, n_repeats=5, random_state=42)
+        importancias_vals = np.abs(importancia_raw.importances_mean)
         
-        self.importancia = dict(zip(self.variables, [float(v) for v in importancias]))
+        # Normalizar
+        total_imp = importancias_vals.sum()
+        if total_imp > 0:
+            importancias_vals = importancias_vals / total_imp
+            
+        self.importancia = dict(zip(self.variables, [float(v) for v in importancias_vals]))
         
         logger.info(f"Modelo entrenado - AUC: {auc:.4f}, TSS: {tss:.4f}")
         
-        # Guardar modelo
+        # Guardar modelo físico
         ruta_modelo = Config.OUTPUTS_DIR / f"modelo_habitat_{self.id_especie}_{self.algoritmo}.pkl"
         joblib.dump({
             'model': self.model,
