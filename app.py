@@ -433,6 +433,7 @@ def mostrar_gestion_usuarios():
 def mostrar_carga_datos():
     """Muestra módulo de ingesta de datos"""
     require_permission(st, 'datos', 'ver')
+    user = get_current_user(st)
     
     st.markdown("""
     <div class="main-header">
@@ -491,14 +492,24 @@ def mostrar_carga_datos():
         with col2:
             if archivo is not None:
                 try:
-                    df = pd.read_csv(archivo)
+                    # Intentamos leer primero asumiendo que es separado por tabulaciones (estándar GBIF)
+                    df = pd.read_csv(archivo, sep='\t', low_memory=False, on_bad_lines='skip')
+                    
+                    # Si solo detectó una columna, significa que en realidad usaba comas
+                    if len(df.columns) == 1:
+                        archivo.seek(0) # Reiniciamos el puntero del archivo
+                        df = pd.read_csv(archivo, sep=',', low_memory=False, on_bad_lines='skip')
+                        
                     st.write(f"**Vista previa ({len(df)} registros):**")
                     st.dataframe(df.head(10), use_container_width=True)
                     
                     if st.button("📥 Cargar Registros en Base de Datos", type="primary"):
                         with st.spinner("Cargando registros..."):
+                            # Convertir DataFrame a tipo object y reemplazar NaN/NaT por None para PostgreSQL
+                            df_clean = df.astype(object).where(pd.notna(df), None)
+                            
                             resultado = DataIngestion.cargar_registros_gbif(
-                                df, especie_sel[0], fuente
+                                df_clean, especie_sel[0], fuente
                             )
                             
                             if resultado.get('success'):
@@ -516,7 +527,7 @@ def mostrar_carga_datos():
         st.markdown("---")
         st.subheader("📍 Visualizar Registros")
         
-        if st.button("Mostrar Mapa de Registros"):
+        if st.checkbox("Mostrar Mapa de Registros"):
             with st.spinner("Generando mapa..."):
                 gdf = DataManager.get_registros_presencia(especie_sel[0], limit=5000)
                 
@@ -526,7 +537,8 @@ def mostrar_carga_datos():
                     mapa = MapVisualizer.agregar_registros_presencia(mapa, gdf)
                     mapa = MapVisualizer.agregar_control_capas(mapa)
                     
-                    st_folium(mapa, width=800, height=500)
+                    # Añadimos returned_objects=[] para evitar que el mapa recargue la app
+                    st_folium(mapa, width=800, height=500, returned_objects=[])
                     st.info(f"Mostrando {len(gdf)} registros")
                 else:
                     st.warning("No hay registros para esta especie")
@@ -569,14 +581,15 @@ def mostrar_carga_datos():
                 st.error(f"Error: {e}")
         
         # Visualizar trayectorias
-        if st.button("Mostrar Trayectorias"):
+        if st.checkbox("Mostrar Trayectorias"):
             gdf = DataManager.get_telemetria(especie_telemetria[0])
             if len(gdf) > 0:
                 centro = (gdf.geometry.y.mean(), gdf.geometry.x.mean())
                 mapa = MapVisualizer.crear_mapa_base(centro=centro, zoom=7)
                 mapa = MapVisualizer.agregar_telemetria(mapa, gdf)
                 mapa = MapVisualizer.agregar_control_capas(mapa)
-                st_folium(mapa, width=800, height=500)
+                
+                st_folium(mapa, width=800, height=500, returned_objects=[])
             else:
                 st.warning("No hay datos de telemetría")
     

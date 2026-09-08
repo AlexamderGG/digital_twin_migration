@@ -37,7 +37,7 @@ class DataIngestion:
         Carga registros de presencia desde un DataFrame estilo GBIF
         
         Columnas esperadas: decimalLatitude, decimalLongitude, eventDate,
-                           occurrenceID, coordinateUncertaintyInMeters
+                            occurrenceID, coordinateUncertaintyInMeters
         """
         try:
             # Limpieza y filtrado
@@ -52,7 +52,7 @@ class DataIngestion:
                 'coordinateUncertaintyInMeters': 'certeza'
             }
             df_limpio = df_limpio.rename(columns={k: v for k, v in column_map.items() 
-                                                   if k in df_limpio.columns})
+                                                  if k in df_limpio.columns})
             
             # Filtrar coordenadas válidas
             df_limpio = df_limpio.dropna(subset=['latitud', 'longitud'])
@@ -87,7 +87,11 @@ class DataIngestion:
                 for _, row in df_limpio.iterrows():
                     lat = float(row['latitud'])
                     lon = float(row['longitud'])
-                    fecha = row.get('fecha_observacion')
+                    
+                    # Interceptar el valor NaT y forzar a None para PostgreSQL
+                    fecha_val = row.get('fecha_observacion')
+                    fecha = None if pd.isna(fecha_val) else fecha_val
+                    
                     id_orig = str(row.get('id_fuente_original', ''))[:100]
                     certeza = float(row.get('certeza', 1.0))
                     

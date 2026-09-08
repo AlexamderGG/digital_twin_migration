@@ -1,12 +1,11 @@
+# -*- coding: utf-8 -*-
 """
 Módulo de Visualización y Mapas Interactivos
 Gemelo Digital de Corredores de Migración
 """
-
 import logging
 from typing import Optional, Dict, List, Tuple, Any
 from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -19,7 +18,6 @@ from plotly.subplots import make_subplots
 import folium
 from folium import plugins
 from shapely.geometry import Point
-
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -39,51 +37,88 @@ PALETA_CONECTIVIDAD = {
 
 class MapVisualizer:
     """Generador de mapas interactivos con Folium"""
-    
+
     @staticmethod
     def crear_mapa_base(centro: Tuple[float, float] = (-5, -72),
-                       zoom: int = 5) -> folium.Map:
+                        zoom: int = 5) -> folium.Map:
+        """Crea mapa base con capas seguras"""
+        # ✅ Mapa base con dimensiones y comportamiento estable
         mapa = folium.Map(
             location=centro,
             zoom_start=zoom,
-            tiles='CartoDB positron',
-            control_scale=True
+            tiles='OpenStreetMap',
+            control_scale=True,
+            width='100%',
+            height='100%'
         )
-        folium.TileLayer(
-            'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-            name='Mapa Topográfico', attr='OpenTopoMap'
-        ).add_to(mapa)
-        folium.TileLayer(
-            'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
-            name='Imagen Satelital', attr='Google'
-        ).add_to(mapa)
-        folium.TileLayer('CartoDB dark_matter', name='Oscuro').add_to(mapa)
+
+        # ✅ Capa OpenTopoMap (verificada)
+        try:
+            folium.TileLayer(
+                tiles='https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+                name='Mapa Topográfico',
+                attr='OpenTopoMap',
+                max_zoom=17
+            ).add_to(mapa)
+        except Exception as e:
+            logger.warning("No se pudo cargar capa OpenTopoMap: %s", e)
+
+        # ✅ CORREGIDO: URL Satelital Google con subdominio y parámetros completos
+        try:
+            folium.TileLayer(
+                tiles='https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+                name='Imagen Satelital',
+                attr='Google',
+                subdomains=['mt0', 'mt1', 'mt2', 'mt3'],
+                max_zoom=20
+            ).add_to(mapa)
+        except Exception as e:
+            logger.warning("No se pudo cargar capa satelital Google: %s", e)
+
+        # ✅ Capa alternativa segura en caso de fallo
+        try:
+            folium.TileLayer(
+                tiles='OpenStreetMap',
+                name='Oscuro'
+            ).add_to(mapa)
+        except Exception as e:
+            logger.warning("No se pudo cargar capa oscura: %s", e)
+
         return mapa
-    
+
     @staticmethod
     def agregar_registros_presencia(mapa: folium.Map, gdf: gpd.GeoDataFrame,
-                                     nombre_capa: str = "Registros",
-                                     color: str = '#E74C3C') -> folium.Map:
-        if len(gdf) == 0:
+                                    nombre_capa: str = "Registros",
+                                    color: str = '#E74C3C') -> folium.Map:
+        if gdf is None or len(gdf) == 0:
+            logger.info("Sin registros de presencia para dibujar")
             return mapa
+
         grupo = folium.FeatureGroup(name=nombre_capa)
         for _, row in gdf.iterrows():
-            geom = row.geometry
-            if geom is None:
+            geom = getattr(row, 'geometry', None)
+            if geom is None or geom.is_empty:
                 continue
-            folium.CircleMarker(
-                location=[geom.y, geom.x], radius=4,
-                color=color, fill=True, fill_opacity=0.7,
-                popup=f"Fecha: {row.get('fecha_observacion', 'N/A')}<br>Fuente: {row.get('fuente', 'N/A')}"
-            ).add_to(grupo)
+            try:
+                folium.CircleMarker(
+                    location=[geom.y, geom.x],
+                    radius=4,
+                    color=color,
+                    fill=True,
+                    fill_opacity=0.7,
+                    popup=f"Fecha: {row.get('fecha_observacion', 'N/A')}<br>Fuente: {row.get('fuente', 'N/A')}"
+                ).add_to(grupo)
+            except Exception as e:
+                logger.debug("Error dibujando registro: %s", e)
         grupo.add_to(mapa)
         return mapa
-    
+
     @staticmethod
     def agregar_uso_suelo(mapa: folium.Map, gdf: gpd.GeoDataFrame,
-                         nombre_capa: str = "Uso del Suelo") -> folium.Map:
-        if len(gdf) == 0:
+                          nombre_capa: str = "Uso del Suelo") -> folium.Map:
+        if gdf is None or len(gdf) == 0:
             return mapa
+
         colores_clase = {
             'bosque humedo': '#228B22', 'bosque seco': '#9ACD32',
             'matorral': '#DAA520', 'sabana': '#F4A460',
@@ -95,94 +130,146 @@ class MapVisualizer:
         for _, row in gdf.iterrows():
             clase = str(row.get('clase_uso', 'desconocido')).lower()
             color = colores_clase.get(clase, '#A9A9A9')
-            folium.GeoJson(
-                row.geometry.__geo_interface__,
-                style_function=lambda x, c=color: {
-                    'fillColor': c, 'color': c, 'weight': 0.5, 'fillOpacity': 0.6
-                },
-                tooltip=f"Uso: {row.get('clase_uso', 'N/A')}"
-            ).add_to(grupo)
+            geom = getattr(row, 'geometry', None)
+            if geom is None:
+                continue
+            try:
+                folium.GeoJson(
+                    geom.__geo_interface__,
+                    style_function=lambda x, c=color: {
+                        'fillColor': c, 'color': c,
+                        'weight': 0.5, 'fillOpacity': 0.6
+                    },
+                    tooltip=f"Uso: {row.get('clase_uso', 'N/A')}"
+                ).add_to(grupo)
+            except Exception as e:
+                logger.debug("Error dibujando uso de suelo: %s", e)
         grupo.add_to(mapa)
         return mapa
-    
+
     @staticmethod
     def agregar_capa_resistencia(mapa: folium.Map, gdf: gpd.GeoDataFrame,
-                                 nombre_capa: str = "Resistencia") -> folium.Map:
-        if len(gdf) == 0:
+                                  nombre_capa: str = "Resistencia") -> folium.Map:
+        if gdf is None or len(gdf) == 0:
             return mapa
+
         grupo = folium.FeatureGroup(name=nombre_capa)
-        resistencia = gdf.get('resistencia', pd.Series([1.0] * len(gdf))).values
-        resistencia_norm = (resistencia - resistencia.min()) / (resistencia.max() - resistencia.min() + 1e-8)
+        resistencia = gdf.get('resistencia', pd.Series([1.0] * len(gdf))).fillna(1.0).values
+        min_r, max_r = resistencia.min(), resistencia.max()
+        rango = max_r - min_r if max_r != min_r else 1e-8
+        resistencia_norm = (resistencia - min_r) / rango
         cmap = plt.get_cmap('RdYlGn_r')
+
         for idx, (_, row) in enumerate(gdf.iterrows()):
-            color = mcolors.to_hex(cmap(resistencia_norm[idx]))
-            folium.GeoJson(
-                row.geometry.__geo_interface__,
-                style_function=lambda x, c=color: {
-                    'fillColor': c, 'color': c, 'weight': 0, 'fillOpacity': 0.55
-                },
-                tooltip=f"Resistencia: {resistencia[idx]:.2f}"
-            ).add_to(grupo)
+            geom = getattr(row, 'geometry', None)
+            if geom is None:
+                continue
+            color = mcolors.to_hex(cmap(np.clip(resistencia_norm[idx], 0, 1)))
+            try:
+                folium.GeoJson(
+                    geom.__geo_interface__,
+                    style_function=lambda x, c=color: {
+                        'fillColor': c, 'color': c,
+                        'weight': 0, 'fillOpacity': 0.55
+                    },
+                    tooltip=f"Resistencia: {resistencia[idx]:.2f}"
+                ).add_to(grupo)
+            except Exception as e:
+                logger.debug("Error dibujando resistencia: %s", e)
         grupo.add_to(mapa)
         return mapa
-    
+
     @staticmethod
     def agregar_corredores(mapa: folium.Map, gdf: gpd.GeoDataFrame,
-                          nombre_capa: str = "Corredores",
-                          color: str = '#8E44AD') -> folium.Map:
-        if len(gdf) == 0:
+                           nombre_capa: str = "Corredores",
+                           color: str = '#8E44AD') -> folium.Map:
+        if gdf is None or len(gdf) == 0:
             return mapa
+
         grupo = folium.FeatureGroup(name=nombre_capa)
         cmap = plt.get_cmap('plasma')
+
         for _, row in gdf.iterrows():
-            importancia = float(row.get('importancia', 0.5))
+            geom = getattr(row, 'geometry', None)
+            if geom is None or not hasattr(geom, 'coords'):
+                continue
+
+            importancia = float(row.get('importancia', 0.5) or 0.5)
+            importancia = max(0.0, min(1.0, importancia))
             grosor = 1 + importancia * 5
-            corriente = float(row.get('corriente_norm', importancia))
+            corriente = float(row.get('corriente_norm', importancia) or importancia)
+            corriente = max(0.0, min(1.0, corriente))
             color_linea = mcolors.to_hex(cmap(corriente))
-            coords = [(y, x) for x, y in row.geometry.coords]
-            folium.PolyLine(
-                coords, color=color_linea, weight=grosor, opacity=0.7,
-                popup=f"Importancia: {importancia:.3f}<br>Dist: {row.get('distancia_km', 0):.1f} km"
-            ).add_to(grupo)
+
+            try:
+                coords = [(y, x) for x, y in geom.coords]
+                folium.PolyLine(
+                    coords,
+                    color=color_linea,
+                    weight=grosor,
+                    opacity=0.7,
+                    popup=(
+                        f"Importancia: {importancia:.3f}<br>"
+                        f"Dist: {row.get('distancia_km', 0):.1f} km"
+                    )
+                ).add_to(grupo)
+            except Exception as e:
+                logger.debug("Error dibujando corredor: %s", e)
         grupo.add_to(mapa)
         return mapa
-    
+
     @staticmethod
     def agregar_parches(mapa: folium.Map, gdf: gpd.GeoDataFrame,
-                       nombre_capa: str = "Parches") -> folium.Map:
-        if len(gdf) == 0:
+                        nombre_capa: str = "Parches") -> folium.Map:
+        if gdf is None or len(gdf) == 0:
             return mapa
+
         grupo = folium.FeatureGroup(name=nombre_capa)
-        calidades = gdf.get('calidad_habitat', pd.Series([0.5] * len(gdf))).values
+        calidades = gdf.get('calidad_habitat', pd.Series([0.5] * len(gdf))).fillna(0.5).values
+        calidades = np.clip(calidades, 0.0, 1.0)
         cmap = plt.get_cmap('YlGn')
+
         for idx, (_, row) in enumerate(gdf.iterrows()):
-            calidad = float(calidades[idx])
+            geom = getattr(row, 'geometry', None)
+            if geom is None:
+                continue
+            calidad = calidades[idx]
             color = mcolors.to_hex(cmap(calidad))
-            folium.GeoJson(
-                row.geometry.__geo_interface__,
-                style_function=lambda x, c=color: {
-                    'fillColor': c, 'color': '#2E7D32', 'weight': 1.5, 'fillOpacity': 0.7
-                },
-                tooltip=f"Calidad: {calidad:.2f}<br>Área: {row.get('area_km2', 0):.1f} km²"
-            ).add_to(grupo)
+            try:
+                folium.GeoJson(
+                    geom.__geo_interface__,
+                    style_function=lambda x, c=color: {
+                        'fillColor': c, 'color': '#2E7D32',
+                        'weight': 1.5, 'fillOpacity': 0.7
+                    },
+                    tooltip=(
+                        f"Calidad: {calidad:.2f}<br>"
+                        f"Área: {row.get('area_km2', 0):.1f} km²"
+                    )
+                ).add_to(grupo)
+            except Exception as e:
+                logger.debug("Error dibujando parche: %s", e)
         grupo.add_to(mapa)
         return mapa
-    
+
     @staticmethod
     def agregar_control_capas(mapa: folium.Map) -> folium.Map:
         folium.LayerControl(collapsed=True).add_to(mapa)
-        plugins.MiniMap(tile_layer='CartoDB positron', position='bottomright').add_to(mapa)
-        plugins.Fullscreen(position='topright').add_to(mapa)
+        try:
+            plugins.MiniMap(tile_layer='OpenStreetMap', position='bottomright').add_to(mapa)
+        except Exception as e:
+            logger.warning("MiniMapa no disponible: %s", e)
+        folium.plugins.Fullscreen(position='topright').add_to(mapa)
         return mapa
 
 
 class ChartGenerator:
     """Generador de gráficos estadísticos"""
-    
+
     @staticmethod
     def comparar_conectividad_temporal(df_estatico: pd.DataFrame,
-                                       df_dinamico: pd.DataFrame,
-                                       metrica: str = 'pc') -> go.Figure:
+                                        df_dinamico: pd.DataFrame,
+                                        metrica: str = 'pc') -> go.Figure:
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=df_estatico['año'], y=df_estatico[metrica],
@@ -195,16 +282,18 @@ class ChartGenerator:
             line=dict(color=PALETA_CONECTIVIDAD['dinamico'], width=3),
             fill='tonexty'
         ))
-        nombres = {'pc': 'Probabilidad de Conectividad (PC)',
-                   'iic': 'Índice Integral de Conectividad (IIC)',
-                   'ec': 'Conectividad Equivalente (EC)'}
+        nombres = {
+            'pc': 'Probabilidad de Conectividad (PC)',
+            'iic': 'Índice Integral de Conectividad (IIC)',
+            'ec': 'Conectividad Equivalente (EC)'
+        }
         fig.update_layout(
             title=f"Evolución de {nombres.get(metrica, metrica)}",
             xaxis_title="Año", yaxis_title=nombres.get(metrica, metrica),
             hovermode='x unified', template='plotly_white', height=450
         )
         return fig
-    
+
     @staticmethod
     def barras_mejora(mejoras: Dict[str, float]) -> go.Figure:
         escenarios = list(mejoras.keys())
@@ -214,15 +303,17 @@ class ChartGenerator:
             x=escenarios, y=valores, marker_color=colores,
             text=[f"{v:.1f}%" for v in valores], textposition='auto'
         ))
-        fig.add_hline(y=25, line_dash="dash", line_color="red",
-                      annotation_text="Umbral hipótesis (25%)")
+        fig.add_hline(
+            y=25, line_dash="dash", line_color="red",
+            annotation_text="Umbral hipótesis (25%)"
+        )
         fig.update_layout(
             title="Mejora en Conectividad: Dinámico vs Estático",
             xaxis_title="Escenario Climático", yaxis_title="Mejora (%)",
             template='plotly_white', height=400
         )
         return fig
-    
+
     @staticmethod
     def importancia_variables(importancia: Dict[str, float]) -> go.Figure:
         items = sorted(importancia.items(), key=lambda x: x[1], reverse=True)
@@ -236,7 +327,7 @@ class ChartGenerator:
             height=max(400, len(items) * 30), yaxis=dict(autorange="reversed")
         )
         return fig
-    
+
     @staticmethod
     def resumen_datos(resumen: Dict[str, Any]) -> go.Figure:
         mapeo = {
@@ -249,19 +340,22 @@ class ChartGenerator:
         fig = go.Figure(go.Bar(x=cats, y=vals, text=vals, textposition='auto'))
         fig.update_layout(title="Resumen de Datos", template='plotly_white', height=400)
         return fig
-    
+
     @staticmethod
     def radar_metricas(metricas_estatico: Dict[str, float],
-                      metricas_dinamico: Dict[str, float]) -> go.Figure:
+                       metricas_dinamico: Dict[str, float]) -> go.Figure:
         categorias = list(metricas_estatico.keys())
-        max_val = max(max(metricas_estatico.values()), max(metricas_dinamico.values()))
+        vals_est = list(metricas_estatico.values())
+        vals_din = list(metricas_dinamico.values())
+        max_val = max((*vals_est, *vals_din, 1e-8))
+
         fig = go.Figure()
         fig.add_trace(go.Scatterpolar(
-            r=[v / max_val for v in metricas_estatico.values()], theta=categorias,
+            r=[v / max_val for v in vals_est], theta=categorias,
             fill='toself', name='Estático', line_color=PALETA_CONECTIVIDAD['estatico']
         ))
         fig.add_trace(go.Scatterpolar(
-            r=[v / max_val for v in metricas_dinamico.values()], theta=categorias,
+            r=[v / max_val for v in vals_din], theta=categorias,
             fill='toself', name='Dinámico', line_color=PALETA_CONECTIVIDAD['dinamico']
         ))
         fig.update_layout(
