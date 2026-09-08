@@ -85,6 +85,62 @@ class MapVisualizer:
             logger.warning("No se pudo cargar capa oscura: %s", e)
 
         return mapa
+    
+    @staticmethod
+    def agregar_telemetria(mapa, gdf):
+        """
+        Agrega trayectorias de telemetría (GPS tracking) al mapa base de Folium.
+        Conecta los puntos secuenciales creando líneas de movimiento por individuo.
+        """
+        import folium
+        
+        if gdf.empty:
+            return mapa
+            
+        # Asegurarnos de que el DataFrame esté ordenado cronológicamente por individuo
+        if 'fecha_hora' in gdf.columns:
+            gdf = gdf.sort_values(by=['id_individuo', 'fecha_hora'])
+            
+        # Crear un grupo de capas para poder encenderlo/apagarlo
+        feature_group = folium.FeatureGroup(name="Trayectorias GPS")
+        
+        # Paleta de colores para diferenciar distintos animales
+        colores = ['#e6194B', '#3cb44b', '#ffe119', '#4363d8', '#f58231', 
+                   '#911eb4', '#42d4f4', '#f032e6', '#bfef45', '#fabed4']
+        
+        individuos = gdf['id_individuo'].unique()
+        
+        for i, individuo in enumerate(individuos):
+            color = colores[i % len(colores)]
+            datos_ind = gdf[gdf['id_individuo'] == individuo]
+            
+            # Extraer lista de coordenadas (latitud, longitud) para la línea
+            coordenadas = [(row.geometry.y, row.geometry.x) for idx, row in datos_ind.iterrows()]
+            
+            # Trazar la línea de trayectoria si el animal tiene más de 1 punto de registro
+            if len(coordenadas) > 1:
+                folium.PolyLine(
+                    locations=coordenadas,
+                    color=color,
+                    weight=3,
+                    opacity=0.8,
+                    tooltip=f"Individuo: {individuo} ({len(coordenadas)} puntos)"
+                ).add_to(feature_group)
+                
+            # Agregar un marcador circular para cada punto exacto registrado
+            for idx, row in datos_ind.iterrows():
+                fecha_str = str(row['fecha_hora']) if 'fecha_hora' in row else 'Fecha desconocida'
+                folium.CircleMarker(
+                    location=(row.geometry.y, row.geometry.x),
+                    radius=4,
+                    color=color,
+                    fill=True,
+                    fill_opacity=0.7,
+                    tooltip=f"Ind: {individuo}<br>Fecha: {fecha_str}"
+                ).add_to(feature_group)
+                
+        feature_group.add_to(mapa)
+        return mapa
 
     @staticmethod
     def agregar_registros_presencia(mapa: folium.Map, gdf: gpd.GeoDataFrame,
