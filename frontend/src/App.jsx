@@ -9,6 +9,9 @@ import Simulacion from './pages/Simulacion';
 import Conectividad from './pages/Conectividad';
 import Reportes from './pages/Reportes';
 import Usuarios from './pages/Usuarios';
+import SpeciesMigrationView from './pages/SpeciesMigrationView';
+
+
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useContext(AuthContext);
@@ -27,6 +30,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="modelos" element={<ModelosHabitat />} />
             <Route path="simulacion" element={<Simulacion />} />
+            <Route path="species-migration" element={<SpeciesMigrationView />} />
             <Route path="conectividad" element={<Conectividad />} />
             <Route path="reportes" element={<Reportes />} />
             <Route path="usuarios" element={<Usuarios />} />

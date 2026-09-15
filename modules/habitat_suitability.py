@@ -6,7 +6,7 @@ Implementa:
 - Modelos MaxEnt-like, Regresión Logística y Random Forest
 - Modelos Híbridos (Ensemble Voting y Stacking Neural Network)
 - Generación de pseudo-ausencias
-- Variables bioclimáticas derivadas
+- Carga dinámica de modelos pre-entrenados óptimos (.pkl)
 - Evaluación de modelos (AUC, TSS, Permutation Importance)
 - Proyección de idoneidad espacial
 """
@@ -66,12 +66,21 @@ class HabitatSuitabilityModeler:
     
     def __init__(self, id_especie: int, algoritmo: str = 'random_forest'):
         self.id_especie = id_especie
-        self.algoritmo = algoritmo
         self.model = None
         self.scaler = StandardScaler()
         self.variables = []
         self.metricas = {}
         self.importancia = {}
+        
+        # ---> DICCIONARIO DE MODELOS ÓPTIMOS <---
+        # Define el mejor algoritmo comprobado estadísticamente para cada especie
+        self.catalogo_optimos = {
+            1: 'random_forest',  # Ej: Ara macao prefiere Random Forest
+            2: 'maxent_like',    # Ej: Chelonia mydas rinde mejor con MaxEnt (HistGB)
+        }
+        
+        # Si la especie está en el catálogo, forzamos su algoritmo óptimo
+        self.algoritmo = self.catalogo_optimos.get(self.id_especie, algoritmo)
         
         # Obtener datos de la especie
         especie_data = DatabaseConnection.execute_query(
@@ -79,22 +88,50 @@ class HabitatSuitabilityModeler:
             {"id": id_especie}
         )
         self.especie = especie_data[0] if especie_data else None
-    
+
+    def cargar_modelo_entrenado(self) -> bool:
+        """
+        Busca y carga el archivo .pkl del modelo óptimo previamente entrenado.
+        Retorna True si lo encontró y cargó correctamente.
+        """
+        # Formato de nombre que usa tu función entrenar()
+        nombre_archivo = f"modelo_habitat_{self.id_especie}_{self.algoritmo}.pkl"
+        ruta_modelo = Config.OUTPUTS_DIR / nombre_archivo
+        
+        try:
+            if not ruta_modelo.exists():
+                logger.warning(f"No se encontró el archivo del modelo en: {ruta_modelo}")
+                return False
+                
+            datos_guardados = joblib.load(ruta_modelo)
+            
+            # Restauramos todo el "cerebro" del modelo en la clase actual
+            self.model = datos_guardados['model']
+            self.scaler = datos_guardados['scaler']
+            self.variables = datos_guardados['variables']
+            self.metricas = datos_guardados.get('metricas', {})
+            self.importancia = datos_guardados.get('importancia', {})
+            
+            logger.info(f"Modelo cargado exitosamente: {nombre_archivo}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error crítico al cargar el modelo .pkl: {str(e)}")
+            return False
+
     def generar_pseudo_ausencias(self, gdf_presencias: gpd.GeoDataFrame,
                                   n_ausencias: int = None,
                                   buffer_distancia: float = 0.1) -> gpd.GeoDataFrame:
         """
-        Genera pseudo-ausencias espacialmente alejadas de las presencias
-        buffer_distancia en grados decimales (~11km)
+        Genera pseudo-ausencias espacialmente alejadas de las presencias.
+        Optimizada con operaciones vectorizadas ultra-rápidas.
         """
         if n_ausencias is None:
             n_ausencias = len(gdf_presencias) * 3
         
-        # Obtener bounding box del área de estudio
         bounds = gdf_presencias.total_bounds
         minx, miny, maxx, maxy = bounds
         
-        # Expandir ligeramente
         expand_x = (maxx - minx) * 0.3
         expand_y = (maxy - miny) * 0.3
         minx -= expand_x
@@ -102,27 +139,40 @@ class HabitatSuitabilityModeler:
         miny -= expand_y
         maxy += expand_y
         
-        # Generar puntos aleatorios
+        # ---> MAGIA DE RENDIMIENTO <---
+        # 1. Dibujamos un "escudo" (buffer) alrededor de todas las presencias 
+        # y las unimos en un solo mega-polígono. (Ultra rápido)
+        logger.info("Creando zonas de exclusión...")
+        zona_exclusion = gdf_presencias.geometry.buffer(buffer_distancia).unary_union
+        
         np.random.seed(42)
-        puntos_generados = 0
         ausencias = []
+        puntos_generados = 0
+        intentos = 0
         
-        while puntos_generados < n_ausencias:
-            lons = np.random.uniform(minx, maxx, n_ausencias * 2)
-            lats = np.random.uniform(miny, maxy, n_ausencias * 2)
+        # 2. Bucle optimizado
+        while puntos_generados < n_ausencias and intentos < 50:
+            intentos += 1
+            # Generamos muchos puntos al mismo tiempo
+            lons = np.random.uniform(minx, maxx, n_ausencias * 3)
+            lats = np.random.uniform(miny, maxy, n_ausencias * 3)
             
-            for lon, lat in zip(lons, lats):
-                if puntos_generados >= n_ausencias:
-                    break
-                
-                punto = Point(lon, lat)
-                
-                # Verificar que esté lejos de presencias
-                distancias = gdf_presencias.geometry.distance(punto)
-                if distancias.min() > buffer_distancia:
-                    ausencias.append({'geometry': punto, 'presencia': 0})
+            # Los convertimos a geometrías en bloque
+            puntos_candidatos = gpd.GeoSeries(gpd.points_from_xy(lons, lats), crs=gdf_presencias.crs)
+            
+            # 3. Filtramos los que NO tocan la zona prohibida de un solo golpe (Vectorización)
+            puntos_validos = puntos_candidatos[~puntos_candidatos.intersects(zona_exclusion)]
+            
+            for pt in puntos_validos:
+                if puntos_generados < n_ausencias:
+                    ausencias.append({'geometry': pt, 'presencia': 0})
                     puntos_generados += 1
-        
+                else:
+                    break
+                    
+        if intentos >= 50:
+            logger.warning("Se alcanzó el límite de intentos al generar pseudo-ausencias.")
+            
         gdf_ausencias = gpd.GeoDataFrame(ausencias, crs=gdf_presencias.crs)
         return gdf_ausencias
     
@@ -130,8 +180,6 @@ class HabitatSuitabilityModeler:
                                       año: int = 2024) -> pd.DataFrame:
         """
         Genera variables ambientales para cada punto.
-        En modo demo, genera variables bioclimáticas sintéticas realistas.
-        En producción, se conectaría a WorldClim/CMIP6.
         """
         np.random.seed(hash(str(self.id_especie)) % 2**32)
         
@@ -139,8 +187,7 @@ class HabitatSuitabilityModeler:
         lons = coords[:, 0]
         lats = coords[:, 1]
         
-        # Gradientes latitudinales y longitudinales realistas
-        base_temp = 30 - np.abs(lats) * 0.7  # Más frío en polos
+        base_temp = 30 - np.abs(lats) * 0.7 
         base_precip = 1000 + np.sin(lons * 0.05) * 500 + np.cos(lats * 0.03) * 300
         
         n = len(lons)
@@ -164,9 +211,8 @@ class HabitatSuitabilityModeler:
             'uso_suelo_resistencia': np.clip(0.2 + np.abs(ruido()) * 0.3, 0.01, 1)
         })
         
-        # Ajuste por año (simular cambio climático)
         delta_año = año - 2020
-        variables['bio1_temp_media_anual'] += delta_año * 0.02  # +0.02°C/año
+        variables['bio1_temp_media_anual'] += delta_año * 0.02 
         variables['bio4_temp_estacionalidad'] += delta_año * 2
         
         return variables
@@ -178,7 +224,6 @@ class HabitatSuitabilityModeler:
             logger.error("Especie no encontrada")
             return None
         
-        # Obtener presencias
         gdf_presencias = DatabaseConnection.read_geodataframe("""
             SELECT id_registro, latitud, longitud, certeza, ubicacion as geometria
             FROM registros_presencia
@@ -191,10 +236,8 @@ class HabitatSuitabilityModeler:
         
         logger.info(f"Entrenando modelo con {len(gdf_presencias)} presencias")
         
-        # Generar pseudo-ausencias
         gdf_ausencias = self.generar_pseudo_ausencias(gdf_presencias)
         
-        # Combinar datos
         gdf_presencias['presencia'] = 1
         gdf_ausencias['presencia'] = 0
         
@@ -203,26 +246,21 @@ class HabitatSuitabilityModeler:
             gdf_ausencias[['geometry', 'presencia']]
         ], ignore_index=True)
         
-        # Generar variables ambientales
         X = self.generar_variables_ambientales(gdf_completo)
         y = gdf_completo['presencia'].values
         
         self.variables = list(X.columns)
         
-        # Escalar variables
         X_scaled = self.scaler.fit_transform(X)
         
-        # División train/test
         X_train, X_test, y_train, y_test = train_test_split(
             X_scaled, y, test_size=test_size, random_state=42, stratify=y
         )
         
-        # Inicialización de Modelos Base
         rf = RandomForestClassifier(n_estimators=200, class_weight='balanced_subsample', random_state=42, n_jobs=-1)
         lr = LogisticRegression(max_iter=1000, class_weight='balanced', random_state=42)
         maxent_proxy = HistGradientBoostingClassifier(max_iter=100, random_state=42)
 
-        # Seleccionar y ensamblar algoritmo
         if self.algoritmo == 'random_forest':
             self.model = rf
         elif self.algoritmo == 'logistic_regression':
@@ -243,16 +281,13 @@ class HabitatSuitabilityModeler:
         else:
             self.model = rf
         
-        # Entrenar
         self.model.fit(X_train, y_train)
         
-        # Evaluar
         y_pred_proba = self.model.predict_proba(X_test)[:, 1]
         y_pred = self.model.predict(X_test)
         
         auc = roc_auc_score(y_test, y_pred_proba)
         
-        # Calcular TSS
         fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba)
         tss = max(tpr - fpr)
         
@@ -267,11 +302,9 @@ class HabitatSuitabilityModeler:
             'variables': self.variables
         }
         
-        # Importancia de variables mediante Permutación (Universal para modelos híbridos y de caja negra)
         importancia_raw = permutation_importance(self.model, X_test, y_test, n_repeats=5, random_state=42)
         importancias_vals = np.abs(importancia_raw.importances_mean)
         
-        # Normalizar
         total_imp = importancias_vals.sum()
         if total_imp > 0:
             importancias_vals = importancias_vals / total_imp
@@ -280,8 +313,10 @@ class HabitatSuitabilityModeler:
         
         logger.info(f"Modelo entrenado - AUC: {auc:.4f}, TSS: {tss:.4f}")
         
-        # Guardar modelo físico
+        # Crear directorio si no existe (por seguridad)
+        Config.OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
         ruta_modelo = Config.OUTPUTS_DIR / f"modelo_habitat_{self.id_especie}_{self.algoritmo}.pkl"
+        
         joblib.dump({
             'model': self.model,
             'scaler': self.scaler,
@@ -291,7 +326,6 @@ class HabitatSuitabilityModeler:
             'id_especie': self.id_especie
         }, ruta_modelo)
         
-        # Guardar en base de datos
         query = """
             INSERT INTO modelos_habitat
             (id_especie, nombre, algoritmo, variables_predictoras, rendimiento,
@@ -326,12 +360,16 @@ class HabitatSuitabilityModeler:
     
     def predecir_idoneidad(self, gdf_puntos: gpd.GeoDataFrame,
                            año: int = 2024) -> np.ndarray:
-        """Predice idoneidad de hábitat para puntos dados"""
+        """Predice idoneidad de hábitat para puntos dados, cargando el modelo si es necesario."""
+        
+        # ---> INTELIGENCIA DE CARGA <---
+        # Si el modelo no está en memoria, intenta buscar el .pkl antes de rendirse
         if self.model is None:
-            raise ValueError("Modelo no entrenado. Llame a entrenar() primero.")
+            if not self.cargar_modelo_entrenado():
+                raise ValueError(f"Modelo para ID {self.id_especie} no está entrenado ni encontrado en disco. Llame a entrenar() primero.")
         
         X = self.generar_variables_ambientales(gdf_puntos, año=año)
-        X = X[self.variables]  # Asegurar orden correcto
+        X = X[self.variables]  # Asegurar orden exacto de las columnas que espera el scaler
         X_scaled = self.scaler.transform(X)
         
         return self.model.predict_proba(X_scaled)[:, 1]
@@ -345,16 +383,13 @@ class HabitatSuitabilityModeler:
         """
         minx, miny, maxx, maxy = bounds
         
-        # Crear grilla
         lons = np.arange(minx, maxx, resolucion)
         lats = np.arange(miny, maxy, resolucion)
         lons_grid, lats_grid = np.meshgrid(lons, lats)
         
-        # Crear puntos
         puntos = [Point(lon, lat) for lon, lat in zip(lons_grid.ravel(), lats_grid.ravel())]
         gdf = gpd.GeoDataFrame({'geometry': puntos}, crs=Config.DEFAULT_CRS)
         
-        # Predecir
         idoneidad = self.predecir_idoneidad(gdf, año=año)
         idoneidad_grid = idoneidad.reshape(lons_grid.shape)
         

@@ -20,6 +20,7 @@ export default function Layout() {
     { name: 'Idoneidad de Hábitat', icon: Cpu, path: '/modelos' }, // Cambiamos el nombre
     { name: 'Conectividad', icon: Zap, path: '/conectividad' },
     { name: 'Simulación Escenarios', icon: Globe, path: '/simulacion' },
+    { name: 'Migración Especie', icon: Database, path: '/species-migration' },
     { name: 'Reportes', icon: FileText, path: '/reportes' },
     { name: 'Gestión Usuarios', icon: Users, path: '/usuarios' },
   ];

@@ -770,6 +770,51 @@ def mostrar_modelos_habitat():
                 st.metric("TSS", f"{res.tss:.4f}")
             with mc3:
                 st.metric("Accuracy", f"{res.accuracy:.4f}")
+
+            # --- BOTÓN DE GUARDADO DEFINITIVO ---
+            st.markdown("---")
+            if st.button("💾 Guardar Modelo en Base de Datos", type="primary", use_container_width=True):
+                try:
+                    import json
+                    from config import DatabaseConnection
+                    
+                    user = get_current_user(st)
+                    id_esp = st.session_state['resultados_modelo']['id_especie']
+                    algo = algoritmo 
+                    
+                    # 1. Empacamos las métricas en un diccionario para la columna 'rendimiento'
+                    rendimiento_data = {
+                        "auc": float(res.auc),
+                        "tss": float(res.tss),
+                        "accuracy": float(res.accuracy)
+                    }
+                    
+                    # 2. Empacamos las importancias en la columna 'parametros'
+                    parametros_data = {
+                        "variables_importance": res.variables_importance
+                    }
+                    
+                    query_insert = """
+                        INSERT INTO modelos_habitat 
+                        (id_especie, nombre, algoritmo, rendimiento, parametros, id_usuario, fecha_creacion)
+                        VALUES (:id_esp, :nombre, :algo, :rendimiento, :parametros, :id_usuario, CURRENT_TIMESTAMP)
+                    """
+                    
+                    params = {
+                        "id_esp": id_esp,
+                        "nombre": f"Modelo {algo.replace('_', ' ').title()}",
+                        "algo": algo,
+                        "rendimiento": json.dumps(rendimiento_data),
+                        "parametros": json.dumps(parametros_data),
+                        "id_usuario": user.id_usuario if user else None
+                    }
+                    
+                    DatabaseConnection.execute_non_query(query_insert, params)
+                    st.success("✅ ¡Modelo guardado permanentemente en la base de datos!")
+                    
+                except Exception as e:
+                    st.error(f"❌ Error al guardar en BD: {e}")
+            # --------------------------------------------------
             
             # Importancia de variables
             st.subheader("📊 Importancia de Variables")

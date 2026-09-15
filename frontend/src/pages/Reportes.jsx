@@ -1,7 +1,39 @@
+import React, { useState } from 'react';
+import api from '../services/api';
+
 export default function Reportes() {
-  const handleDownload = (format) => {
-    // Aquí se conectará con el endpoint de FastAPI que retorna el archivo
-    alert(`Iniciando descarga del reporte en formato: ${format.toUpperCase()}`);
+  const [loading, setLoading] = useState(false);
+
+  // Función genérica para descargar cualquier formato
+  const handleDownload = async (formato) => {
+    setLoading(true);
+    try {
+      // Es crucial poner responseType: 'blob' para que Axios no intente leerlo como JSON
+      const response = await api.get(`/reportes/${formato}`, {
+        responseType: 'blob' 
+      });
+
+      // Creamos un link temporal en memoria con el archivo
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('link');
+      link.href = url;
+      
+      // Extraemos el nombre del archivo de los headers si es posible, o forzamos uno
+      const extension = formato === 'excel' ? 'xlsx' : formato === 'word' ? 'docx' : 'pdf';
+      link.setAttribute('download', `Resultados_Migracion.${extension}`);
+      
+      // Simulamos el clic y limpiamos la memoria
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error(`Error descargando el reporte ${formato}:`, error);
+      alert("Hubo un problema al generar el reporte. Verifica que existan simulaciones previas.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

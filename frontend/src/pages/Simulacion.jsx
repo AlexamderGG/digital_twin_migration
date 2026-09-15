@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import api from '../services/api';
+import api from '../services/api'; 
 
 export default function Simulacion() {
   const [especies, setEspecies] = useState([]);
@@ -18,10 +18,11 @@ export default function Simulacion() {
         const res = await api.get('/datos/especies');
         if (res.data.success && res.data.data.length > 0) {
           setEspecies(res.data.data);
-          setSelectedEspecie(res.data.data[0].id_especie);
+          setSelectedEspecie(res.data.data[0].id_especie.toString());
         }
       } catch (err) {
         console.error("Error cargando especies", err);
+        setError('No se pudieron cargar las especies de la base de datos.');
       }
     };
     fetchEspecies();
@@ -29,7 +30,12 @@ export default function Simulacion() {
 
   const handleSimular = async (e) => {
     e.preventDefault();
-    if (yearStart >= yearEnd) {
+    
+    if (!selectedEspecie) {
+      setError('Debes seleccionar una especie.');
+      return;
+    }
+    if (parseInt(yearStart) >= parseInt(yearEnd)) {
       setError('El año de inicio debe ser menor al año de fin.');
       return;
     }
@@ -47,10 +53,12 @@ export default function Simulacion() {
       });
       
       if (res.data.success) {
+        console.log("📦 PAQUETE DEL BACKEND:", res.data.data); // Nuestro espía
         setResultado(res.data.data);
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Error en la simulación de escenarios.');
+      const mensajeError = err.response?.data?.detail || err.message || 'Error en la conexión con el servidor.';
+      setError(mensajeError);
     } finally {
       setLoading(false);
     }
@@ -158,6 +166,10 @@ export default function Simulacion() {
               <div className="mt-6 pt-4 border-t border-gray-200 text-sm text-gray-500">
                 Especie: {resultado.especie} | Escenario: {resultado.escenario}
               </div>
+              {/* MAPA */}
+              {resultado.url_mapa_resultado && (
+                <img src={`http://localhost:8000${resultado.url_mapa_resultado}`} alt="Mapa Resultado" className="w-full h-auto mt-4" />
+              )}
             </div>
           ) : (
              <div className="text-center text-gray-400">
