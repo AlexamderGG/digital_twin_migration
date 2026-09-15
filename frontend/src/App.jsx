@@ -7,16 +7,32 @@ import Dashboard from './pages/Dashboard';
 import ModelosHabitat from './pages/ModelosHabitat';
 import Simulacion from './pages/Simulacion';
 import Conectividad from './pages/Conectividad';
-import Reportes from './pages/Reportes';
+import Reportes from './pages/ReportesView';
 import Usuarios from './pages/Usuarios';
 import SpeciesMigrationView from './pages/SpeciesMigrationView';
 
-
-
+// 1. Protege las rutas privadas (Si NO hay usuario, manda al login)
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useContext(AuthContext);
-  if (loading) return <div className="h-screen flex items-center justify-center">Cargando...</div>;
-  return user ? children : <Navigate to="/login" />;
+  
+  if (loading) return (
+    // Agregamos dark mode a la pantalla de carga para evitar pantallazos blancos
+    <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors">
+      Cargando...
+    </div>
+  );
+  
+  // replace={true} evita que el usuario pueda usar el botón "Atrás" para volver a la ruta bloqueada
+  return user ? children : <Navigate to="/login" replace />;
+};
+
+// 2. Protege el Login (Si YA hay usuario, manda al inicio)
+const PublicRoute = ({ children }) => {
+  const { user, loading } = useContext(AuthContext);
+  
+  if (loading) return null;
+  
+  return user ? <Navigate to="/" replace /> : children;
 };
 
 function App() {
@@ -24,8 +40,17 @@ function App() {
     <AuthProvider>
       <Router>
         <Routes>
-          <Route path="/login" element={<Login />} />
+          {/* Ruta pública: Login */}
+          <Route 
+            path="/login" 
+            element={
+              <PublicRoute>
+                <Login />
+              </PublicRoute>
+            } 
+          />
           
+          {/* Rutas privadas: Envueltas en el Layout */}
           <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="modelos" element={<ModelosHabitat />} />
@@ -35,6 +60,9 @@ function App() {
             <Route path="reportes" element={<Reportes />} />
             <Route path="usuarios" element={<Usuarios />} />
           </Route>
+
+          {/* Ruta comodín (404): Si escribe cualquier URL inválida, lo regresa a la raíz */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
     </AuthProvider>
