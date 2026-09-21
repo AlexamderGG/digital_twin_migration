@@ -340,9 +340,9 @@ class ScenarioSimulator:
         gdf_resistencia_base = ResistanceLayer.generar_capa_resistencia(gdf_uso_suelo)
         
         grafo = LandscapeGraph(self.id_especie)
-        grafo.construir_desde_parches(gdf_parches_estaticos, gdf_resistencia_base, distancia_max=150)
+        grafo.construir_desde_parches(gdf_parches_estaticos, gdf_resistencia_base, distancia_max=1200)
         
-        corredores_estaticos = grafo.identificar_corredores(umbral_corriente=0.15)
+        corredores_estaticos = grafo.identificar_corredores(umbral_corriente=0.02)
         corredores_estaticos['tipo'] = 'estatico'
         corredores_estaticos['año_diseno'] = self.año_inicio
         
@@ -362,7 +362,7 @@ class ScenarioSimulator:
             # Evaluamos la misma red antigua en el terreno del futuro
             gdf_resistencia_actual = ResistanceLayer.generar_capa_resistencia(uso_suelo_actual)
             grafo_eval = LandscapeGraph(self.id_especie)
-            grafo_eval.construir_desde_parches(gdf_parches_estaticos, gdf_resistencia_actual, distancia_max=150)
+            grafo_eval.construir_desde_parches(gdf_parches_estaticos, gdf_resistencia_actual, distancia_max=1200)
             
             resultado = grafo_eval.calcular_metricas_conectividad()
             
@@ -416,7 +416,7 @@ class ScenarioSimulator:
             gdf_resistencia = ResistanceLayer.generar_capa_resistencia(uso_suelo_actual)
             
             grafo = LandscapeGraph(self.id_especie)
-            grafo.construir_desde_parches(gdf_parches_actuales, gdf_resistencia, distancia_max=150)
+            grafo.construir_desde_parches(gdf_parches_actuales, gdf_resistencia, distancia_max=1200)
             
             resultado = grafo.calcular_metricas_conectividad()
             
@@ -428,7 +428,7 @@ class ScenarioSimulator:
                 'corriente_total': resultado.corriente_total
             })
             
-            corredores_año = grafo.identificar_corredores(umbral_corriente=0.15)
+            corredores_año = grafo.identificar_corredores(umbral_corriente=0.02)
             if not corredores_año.empty:
                 corredores_año['año'] = año
                 corredores_año['tipo'] = 'dinamico'
@@ -457,7 +457,7 @@ class ScenarioSimulator:
         )
     
     def _generar_mapa_visual(self, res_estatico, res_dinamico) -> str:
-        """Toma las geometrías y dibuja un mapa PNG con contexto geográfico real"""
+        """Toma las geometrías y dibuja un mapa PNG con contexto geográfico real (CORREGIDO ZOOM)"""
         import os
         import matplotlib.pyplot as plt
         import geopandas as gpd
@@ -500,12 +500,21 @@ class ScenarioSimulator:
         if not res_dinamico.corredores.empty:
             res_dinamico.corredores.plot(ax=ax, color='#2563eb', linewidth=3, alpha=0.9)
 
+        # ==============================================================
+        # NUEVO SISTEMA DE ZOOM INTELIGENTE
+        # ==============================================================
         if not res_dinamico.parches.empty:
             minx, miny, maxx, maxy = res_dinamico.parches.total_bounds
-            margen_x = max((maxx - minx) * 0.3, 3) 
-            margen_y = max((maxy - miny) * 0.3, 3)
+            ancho = maxx - minx
+            alto = maxy - miny
+            
+            # Margen del 15% proporcional al tamaño real, mínimo 0.5 grados para que nunca quede pegado al borde
+            margen_x = max(ancho * 0.15, 0.5) 
+            margen_y = max(alto * 0.15, 0.5)
+            
             ax.set_xlim([minx - margen_x, maxx + margen_x])
             ax.set_ylim([miny - margen_y, maxy + margen_y])
+        # ==============================================================
 
         plt.title(f"Proyección de Corredores al {self.año_fin} - {self.codigo_ssp}", fontsize=16, pad=15)
         
@@ -517,7 +526,8 @@ class ScenarioSimulator:
         ax.legend(handles=elementos_leyenda, loc='lower right', framealpha=0.95)
         plt.axis('off')
 
-        plt.savefig(ruta_fisica, bbox_inches='tight', dpi=150)
+        # Recortamos el blanco sobrante (bbox_inches='tight') y aumentamos la calidad para el frontend
+        plt.savefig(ruta_fisica, bbox_inches='tight', pad_inches=0.05, dpi=300, transparent=True)
         plt.close(fig)
         return ruta_web
     
@@ -607,7 +617,7 @@ class ScenarioSimulator:
         }
     
     def _guardar_simulacion(self, res_estatico: EscenarioResultado,
-                           res_dinamico: EscenarioResultado, mejora: float) -> Optional[int]:
+                            res_dinamico: EscenarioResultado, mejora: float) -> Optional[int]:
         try:
             escenario = DatabaseConnection.execute_query(
                 "SELECT id_escenario FROM escenarios_climaticos WHERE codigo_ssp = :cod",

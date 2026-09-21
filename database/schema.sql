@@ -3,6 +3,9 @@
 -- Esquema de Base de Datos PostgreSQL + PostGIS
 -- =============================================================================
 
+-- Crea la base de datos si no existe
+CREATE DATABASE IF NOT EXISTS digital_twin_migration;
+
 -- Habilitar extensiones necesarias
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS postgis_topology;
@@ -56,7 +59,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
     id_usuario SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
-    nombre_completo VARCHAR(150) NOT NULL,
+    nombre_completo VARCHAR(150),
     password_hash VARCHAR(255) NOT NULL,
     id_rol INTEGER REFERENCES roles(id_rol) DEFAULT 4,
     institucion VARCHAR(150),
@@ -424,3 +427,7 @@ COMMENT ON TABLE simulaciones IS
 
 COMMENT ON TABLE corredores IS 
 'Corredores ecológicos resultantes de las simulaciones de optimización dinámica';
+
+
+ALTER TABLE usuarios ADD COLUMN rol VARCHAR(50) DEFAULT 'Investigador';
+

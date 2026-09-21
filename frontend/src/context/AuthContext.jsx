@@ -7,19 +7,31 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Al cargar la app, revisamos si hay una sesión guardada
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
-    
-    if (storedUser && token) {
-      setUser(JSON.parse(storedUser));
-    }
-    setLoading(false);
+    const initAuth = () => {
+      const token = localStorage.getItem('token');
+      const storedUser = localStorage.getItem('user');
+
+      if (token && storedUser) {
+        try {
+          setUser(JSON.parse(storedUser));
+        } catch (error) {
+          console.error("Error leyendo datos del usuario");
+          localStorage.clear();
+          setUser(null);
+        }
+      } else {
+        setUser(null);
+      }
+      
+      setLoading(false); 
+    };
+
+    initAuth();
   }, []);
 
   const login = async (username, password) => {
-    // FastAPI requiere application/x-www-form-urlencoded para OAuth2
+
     const formData = new URLSearchParams();
     formData.append('username', username);
     formData.append('password', password);
@@ -32,7 +44,6 @@ export const AuthProvider = ({ children }) => {
 
     const { access_token, user: userData } = response.data;
     
-    // Guardamos en local para persistencia
     localStorage.setItem('token', access_token);
     localStorage.setItem('user', JSON.stringify(userData));
     setUser(userData);

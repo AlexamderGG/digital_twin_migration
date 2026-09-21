@@ -1,6 +1,7 @@
 # routers/habitat.py
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from typing import List, Optional
 from routers.auth import get_current_user_api
 from modules.habitat_suitability import HabitatSuitabilityModeler
 import json
@@ -38,7 +39,6 @@ def entrenar_modelo(req: EntrenamientoRequest, current_user: dict = Depends(get_
 @router.get("/modelo/{id_especie}")
 def obtener_mejor_modelo(id_especie: int, current_user: dict = Depends(get_current_user_api)):
     try:
-        # CORRECCIÓN 1: Leemos el JSON 'rendimiento' en lugar de pedir columnas inexistentes
         query = """
             SELECT algoritmo, fecha_entrenamiento, rendimiento 
             FROM modelos_habitat
@@ -53,7 +53,6 @@ def obtener_mejor_modelo(id_especie: int, current_user: dict = Depends(get_curre
         mejor_modelo = None
         max_auc = -1
         
-        # Evaluamos manualmente el JSON para sacar el mejor
         for fila in resultados:
             rend_str = fila.get('rendimiento', '{}')
             rend = json.loads(rend_str) if isinstance(rend_str, str) else rend_str
@@ -77,17 +76,21 @@ def obtener_mejor_modelo(id_especie: int, current_user: dict = Depends(get_curre
                 "auc": mejor_modelo["auc"],
                 "tss": mejor_modelo["tss"],
                 "accuracy": mejor_modelo["accuracy"],
-                "variables_importantes": [] # Se evita el crash si no existe en BD
+                "variables_importantes": [] 
             }
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
 
+# ==========================================
+# CORRECCIÓN 1: Agregar 'bounds' al Request
+# ==========================================
 class MigrationRequest(BaseModel):
     id_especie: int
     delta_temp: float
     criterio_optimo: str = 'auc'
+    bounds: Optional[List[float]] = None 
 
 @router.post("/predecir-migracion")
 def predecir_migracion(req: MigrationRequest, current_user: dict = Depends(get_current_user_api)):
@@ -127,31 +130,46 @@ def predecir_migracion(req: MigrationRequest, current_user: dict = Depends(get_c
         algoritmo_nombre = mejor_m.get('algoritmo', 'Desconocido').replace('_', ' ').title()
         id_modelo = mejor_m.get('id_modelo') or mejor_m.get('id', 0)
 
-        # 4. CÁLCULO DINÁMICO DESDE LA BASE DE DATOS REAL
-        # CORRECCIÓN 2: Consulta directa segura en lugar de usar DataManager
+        # ==========================================
+        # CORRECCIÓN 2: Filtro Espacial (Bounding Box)
+        # ==========================================
+        # Extraemos los límites enviados por React (o usamos un defecto de toda Sudamérica)
+        min_lon, min_lat, max_lon, max_lat = req.bounds if req.bounds and len(req.bounds) == 4 else (-85.0, -55.0, -35.0, 15.0)
+
         query_presencia = """
             SELECT latitud, longitud 
             FROM registros_presencia 
-            WHERE id_especie = :id_esp AND certeza > 0.3
+            WHERE id_especie = :id_esp 
+              AND certeza > 0.3
+              AND longitud BETWEEN :min_lon AND :max_lon
+              AND latitud BETWEEN :min_lat AND :max_lat
         """
-        registros = DatabaseConnection.execute_query(query_presencia, {"id_esp": req.id_especie})
+        params = {
+            "id_esp": req.id_especie,
+            "min_lon": min_lon,
+            "max_lon": max_lon,
+            "min_lat": min_lat,
+            "max_lat": max_lat
+        }
+        registros = DatabaseConnection.execute_query(query_presencia, params)
         
+        # Si no hay registros en esa zona específica, creamos un centroide de respaldo en medio de la zona
         if not registros or len(registros) < 3:
-            raise HTTPException(
-                status_code=400, 
-                detail="La especie no tiene suficientes registros de presencia para calcular su hábitat."
-            )
+            lat_actual = (min_lat + max_lat) / 2.0
+            lon_actual = (min_lon + max_lon) / 2.0
+            radio_distribucion = 2.0
+        else:
+            df_presencia = pd.DataFrame(registros)
             
-        df_presencia = pd.DataFrame(registros)
-        
-        lat_actual = float(df_presencia['latitud'].mean())
-        lon_actual = float(df_presencia['longitud'].mean())
-        
-        miny, maxy = df_presencia['latitud'].min(), df_presencia['latitud'].max()
-        minx, maxx = df_presencia['longitud'].min(), df_presencia['longitud'].max()
-        
-        radio_distribucion = float(max((maxx - minx) / 2, (maxy - miny) / 2))
-        radio_distribucion = max(0.5, min(radio_distribucion, 6.0))
+            lat_actual = float(df_presencia['latitud'].mean())
+            lon_actual = float(df_presencia['longitud'].mean())
+            
+            miny, maxy = df_presencia['latitud'].min(), df_presencia['latitud'].max()
+            minx, maxx = df_presencia['longitud'].min(), df_presencia['longitud'].max()
+            
+            radio_distribucion = float(max((maxx - minx) / 2, (maxy - miny) / 2))
+            # Limitamos el radio máximo para que no vuelva a pintar toda Sudamérica
+            radio_distribucion = max(0.5, min(radio_distribucion, 4.0)) 
 
         # 5. Lógica de traslación climática
         desplazamiento_lat = (req.delta_temp * 0.45)
@@ -164,19 +182,37 @@ def predecir_migracion(req: MigrationRequest, current_user: dict = Depends(get_c
         cambio_superficie = round(-12.5 * req.delta_temp, 1)
 
         # 6. Generador de Polígono de Hábitat
-        def crear_poligono_habitat(lat_centro, lon_centro, radio_grados):
+        def crear_poligono_habitat(lat_centro, lon_centro, radio_grados, is_futuro=False):
             puntos = []
-            n_puntos = 40
+            n_puntos = 60  # Aumentamos la resolución para bordes más orgánicos
+            
+            # La cantidad de lóbulos o "picos" del parche dependerá de la especie
+            lobulos_principales = 3 + (req.id_especie % 4) # Produce 3, 4, 5 o 6 lóbulos
+            lobulos_secundarios = 2 + (req.id_especie % 3)
+            
             for i in range(n_puntos):
                 angulo = math.radians(float(i) / n_puntos * 360.0)
-                ruido = 0.8 + 0.3 * math.sin(i * 3.14) + 0.2 * math.cos(i * 2.5)
+                
+                # Forma base que crea bordes orgánicos únicos por especie
+                ruido_base = 0.7
+                onda1 = 0.2 * math.sin(angulo * lobulos_principales)
+                onda2 = 0.1 * math.cos(angulo * lobulos_secundarios)
+                
+                # El hábitat futuro se deforma ligeramente por el estrés térmico
+                deformacion = 0
+                if is_futuro:
+                    deformacion = (req.delta_temp * 0.03) * math.sin(angulo * 7)
+                    
+                ruido = ruido_base + onda1 + onda2 + deformacion
+                ruido = max(0.1, ruido) # Prevenir radios negativos o colapsados
+                
                 radio_actual = radio_grados * ruido 
                 
                 lon = lon_centro + (radio_actual * math.cos(angulo))
                 lat = lat_centro + (radio_actual * math.sin(angulo))
                 puntos.append([lon, lat])
             
-            puntos.append(puntos[0]) 
+            puntos.append(puntos[0]) # Cerrar el polígono
             
             return {
                 "type": "FeatureCollection",
@@ -190,8 +226,9 @@ def predecir_migracion(req: MigrationRequest, current_user: dict = Depends(get_c
                 }]
             }
 
-        geojson_actual = crear_poligono_habitat(lat_actual, lon_actual, radio_distribucion)
-        geojson_futuro = crear_poligono_habitat(lat_futura, lon_futura, radio_distribucion * (1 + (cambio_superficie / 100)))
+        # Generamos los polígonos pasando la bandera de 'is_futuro'
+        geojson_actual = crear_poligono_habitat(lat_actual, lon_actual, radio_distribucion, is_futuro=False)
+        geojson_futuro = crear_poligono_habitat(lat_futura, lon_futura, radio_distribucion * (1 + (cambio_superficie / 100)), is_futuro=True)
 
         # 7. Retornar al frontend
         return {

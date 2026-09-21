@@ -20,15 +20,19 @@ export default function Layout() {
   // Inicializamos el hook del modo oscuro
   const [theme, toggleTheme] = useDarkMode();
 
+  // Agregamos una bandera 'adminOnly' a las rutas protegidas
   const menuItems = [
     { name: 'Panel Principal', icon: Home, path: '/' },
-    { name: 'Idoneidad de Hábitat', icon: Cpu, path: '/modelos' },
-    { name: 'Conectividad', icon: Zap, path: '/conectividad' },
     { name: 'Simulación Escenarios', icon: Globe, path: '/simulacion' },
     { name: 'Migración Especie', icon: Database, path: '/species-migration' },
     { name: 'Reportes', icon: FileText, path: '/reportes' },
-    { name: 'Gestión Usuarios', icon: Users, path: '/usuarios' },
+    { name: 'Gestión Usuarios', icon: Users, path: '/usuarios', adminOnly: true },
   ];
+
+  // Filtramos el menú: si requiere ser admin, verificamos el rol del usuario
+  const visibleMenuItems = menuItems.filter(item => 
+    !item.adminOnly || user?.rol?.toLowerCase() === 'administrador'
+  );
 
   return (
     // Agregamos dark:bg-slate-900 al fondo global
@@ -42,12 +46,13 @@ export default function Layout() {
         </div>
         
         <div className="p-4 bg-blue-50 dark:bg-slate-700 mx-4 mt-4 rounded-lg transition-colors">
-          <p className="font-semibold text-sm text-gray-800 dark:text-slate-200">{user?.nombre_completo}</p>
+          <p className="font-semibold text-sm text-gray-800 dark:text-slate-200">{user?.nombre_completo || user?.username}</p>
           <p className="text-xs text-gray-600 dark:text-slate-400 capitalize">{user?.rol}</p>
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-          {menuItems.map((item) => (
+          {/* Mapeamos solo los items visibles según el rol */}
+          {visibleMenuItems.map((item) => (
             <NavLink
               key={item.name}
               to={item.path}

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 # Importamos todos los routers
-from routers import auth, datos, simulacion, habitat, conectividad, reportes
+from routers import auth, datos, simulacion, habitat, conectividad, reportes, usuarios
 
 
 
@@ -29,6 +29,7 @@ app.include_router(simulacion.router, prefix="/api/simulacion", tags=["Simulacio
 app.include_router(habitat.router, prefix="/api/habitat", tags=["Modelos de Hábitat"])
 app.include_router(conectividad.router, prefix="/api/conectividad", tags=["Conectividad"])
 app.include_router(reportes.router, prefix="/api/reportes", tags=["Reportes"])
+app.include_router(usuarios.router, prefix="/api/usuarios", tags=["Usuarios"])
 
 
 
