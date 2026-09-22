@@ -1,0 +1,69 @@
+{
+  "sidebar": {
+    "dashboard": "Main Dashboard",
+    "habitat": "Habitat Models",
+    "migration": "Species Migration"
+  },
+  "migration": {
+    "title": "🌿 Migration Prediction",
+    "subtitle": "Climate Digital Twin",
+    "species_label": "Target Species:",
+    "region_label": "Analysis Region:",
+    "temp_label": "Temperature Variation:",
+    "simulate_btn": "Simulate Migration",
+    "best_model": "Best Model",
+    "displacement": "Displacement:",
+    "habitat_change": "Habitat Change:",
+    "loading": "Calculating with the best model..."
+  },
+
+  "simulation": {
+    "title": "🌍 Climate Scenarios Simulation",
+    "subtitle": "Functional connectivity comparison under shared socioeconomic pathways (SSP).",
+    "parameters_title": "Parameters",
+    "species_label": "Species",
+    "ssp_label": "Climate Scenario (SSP)",
+    "ssp_1": "SSP1-2.6 (Sustainability)",
+    "ssp_2": "SSP2-4.5 (Intermediate)",
+    "ssp_3": "SSP5-8.5 (High emission)",
+    "year_start": "Start Year",
+    "year_end": "End Year",
+    "simulating_btn": "Simulating scenario...",
+    "execute_btn": "🚀 Run Comparison",
+    "processing": "Processing landscape connectivity. This may take a few moments...",
+    "hypothesis_supported": "✅ HYPOTHESIS SUPPORTED",
+    "partial_result": "⚠️ PARTIAL RESULT",
+    "avg_improvement": "Average improvement in connectivity: ",
+    "hypothesis_desc_supported": "The dynamic design exceeds the 25% threshold established in the hypothesis.",
+    "hypothesis_desc_partial": "The 25% improvement threshold is not met in this scenario.",
+    "species_result": "Species:",
+    "scenario_result": "Scenario:",
+    "map_instructions": "Use the mouse wheel to zoom in and drag to move the map",
+    "map_alt": "Result Map",
+    "empty_state": "Configure parameters and run the simulation to compare static vs. dynamic corridors.",
+    "errors": {
+        "load_species": "Could not load species from the database.",
+        "select_species": "You must select a species.",
+        "invalid_years": "Start year must be less than end year.",
+        "connection": "Server connection error."
+    }
+  },
+
+  "reports": {
+    "title": "Report Generation",
+    "subtitle": "Export connectivity results to PDF, Word, and Excel.",
+    "select_label": "Select Simulation to Export:",
+    "no_simulations": "No simulations found in the database...",
+    "scenario": "Scenario",
+    "loading_preview": "Loading preview and rendering PDF document...",
+    "btn_pdf": "Download PDF",
+    "btn_word": "Download Word",
+    "btn_excel": "Download Excel",
+    "preview_summary": "Preview: Executive Summary",
+    "preview_chart": "Evolution of Probability of Connectivity (PC)",
+    "preview_pdf": "Generated Document Viewer",
+    "static_design": "Static Design",
+    "dynamic_design": "Dynamic Design",
+    "no_data": "No data available to display."
+    }
+}

@@ -1,0 +1,68 @@
+{
+  "sidebar": {
+    "dashboard": "Panel Principal",
+    "habitat": "Modelos de Hábitat",
+    "migration": "Migración Especie"
+  },
+  "migration": {
+    "title": "🌿 Predicción de Migración",
+    "subtitle": "Gemelo Digital Climático",
+    "species_label": "Especie Objetivo:",
+    "region_label": "Región de Análisis:",
+    "temp_label": "Variación de Temperatura:",
+    "simulate_btn": "Simular Migración",
+    "best_model": "Mejor Modelo",
+    "displacement": "Desplazamiento:",
+    "habitat_change": "Cambio de Hábitat:",
+    "loading": "Calculando con el mejor modelo..."
+  },
+  "simulation": {
+    "title": "🌍 Simulación de Escenarios Climáticos",
+    "subtitle": "Comparación de conectividad funcional bajo rutas socioeconómicas compartidas (SSP).",
+    "parameters_title": "Parámetros",
+    "species_label": "Especie",
+    "ssp_label": "Escenario Climático (SSP)",
+    "ssp_1": "SSP1-2.6 (Sostenibilidad)",
+    "ssp_2": "SSP2-4.5 (Intermedio)",
+    "ssp_3": "SSP5-8.5 (Alto consumo)",
+    "year_start": "Año Inicio",
+    "year_end": "Año Fin",
+    "simulating_btn": "Simulando escenario...",
+    "execute_btn": "🚀 Ejecutar Comparación",
+    "processing": "Procesando conectividad del paisaje. Esto puede tomar unos momentos...",
+    "hypothesis_supported": "✅ HIPÓTESIS SOPORTADA",
+    "partial_result": "⚠️ RESULTADO PARCIAL",
+    "avg_improvement": "Mejora promedio en conectividad: ",
+    "hypothesis_desc_supported": "El diseño dinámico supera el umbral del 25% establecido en la hipótesis.",
+    "hypothesis_desc_partial": "No se alcanza el umbral del 25% de mejora en este escenario.",
+    "species_result": "Especie:",
+    "scenario_result": "Escenario:",
+    "map_instructions": "Usa la rueda del ratón para hacer zoom y arrastra para mover el mapa",
+    "map_alt": "Mapa Resultado",
+    "empty_state": "Configura los parámetros y ejecuta la simulación para comparar los corredores estáticos vs. dinámicos.",
+    "errors": {
+        "load_species": "No se pudieron cargar las especies de la base de datos.",
+        "select_species": "Debes seleccionar una especie.",
+        "invalid_years": "El año de inicio debe ser menor al año de fin.",
+        "connection": "Error en la conexión con el servidor."
+    }
+  },
+
+  "reports": {
+    "title": "Generación de Reportes",
+    "subtitle": "Exportación de resultados de conectividad en PDF, Word y Excel.",
+    "select_label": "Seleccionar Simulación a Exportar:",
+    "no_simulations": "No hay simulaciones en la base de datos...",
+    "scenario": "Escenario",
+    "loading_preview": "Cargando vista previa y renderizando documento PDF...",
+    "btn_pdf": "Descargar PDF",
+    "btn_word": "Descargar Word",
+    "btn_excel": "Descargar Excel",
+    "preview_summary": "Vista Previa: Resumen Ejecutivo",
+    "preview_chart": "Evolución de la Probabilidad de Conectividad (PC)",
+    "preview_pdf": "Visor de Documento Generado",
+    "static_design": "Diseño Estático",
+    "dynamic_design": "Diseño Dinámico",
+    "no_data": "No hay datos disponibles para mostrar."
+    }
+}
