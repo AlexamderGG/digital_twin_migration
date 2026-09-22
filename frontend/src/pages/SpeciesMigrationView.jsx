@@ -136,7 +136,7 @@ export default function SpeciesMigrationView() {
         </div>
 
         <div>
-          <label className="block text-sm font-semibold mb-1 dark:text-slate-300">{t('Región de Análisis:')}</label>
+          <label className="block text-sm font-semibold mb-1 dark:text-slate-300">{t('migration.region_label')}</label>
           <select 
             value={selectedRegion} 
             onChange={(e) => setSelectedRegion(e.target.value)}

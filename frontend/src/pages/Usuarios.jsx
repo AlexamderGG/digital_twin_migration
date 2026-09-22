@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
+import { useTranslation } from 'react-i18next'; // 1. Importar hook de traducción
 
 export default function Usuarios() {
+  const { t } = useTranslation(); // 2. Inicializar hook
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -92,7 +94,7 @@ export default function Usuarios() {
       } else {
         // Crear nuevo usuario
         if (!formData.password) {
-          setError('La contraseña es obligatoria para nuevos usuarios.');
+          setError(t('users.error_password_required', 'La contraseña es obligatoria para nuevos usuarios.'));
           setLoading(false);
           return;
         }
@@ -101,7 +103,7 @@ export default function Usuarios() {
       await fetchUsuarios(); // Recargamos la tabla
       closeModal();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Error al guardar el usuario.');
+      setError(err.response?.data?.detail || t('users.error_saving', 'Error al guardar el usuario.'));
     } finally {
       setLoading(false);
     }
@@ -109,13 +111,13 @@ export default function Usuarios() {
 
   // 3. ELIMINAR (Delete)
   const handleDelete = async (id) => {
-    if (!window.confirm('¿Estás seguro de que deseas eliminar este usuario?')) return;
+    if (!window.confirm(t('users.confirm_delete', '¿Estás seguro de que deseas eliminar este usuario?'))) return;
     
     try {
       await api.delete(`/usuarios/${id}`);
       await fetchUsuarios();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Error al eliminar el usuario.');
+      alert(err.response?.data?.detail || t('users.error_deleting', 'Error al eliminar el usuario.'));
     }
   };
 
@@ -123,21 +125,21 @@ export default function Usuarios() {
     <div className="space-y-6 relative">
       {/* Cabecera */}
       <div className="bg-gradient-to-r from-blue-900 to-blue-600 dark:from-slate-800 dark:to-slate-700 rounded-xl p-6 text-white shadow-md transition-colors duration-200">
-        <h1 className="text-2xl font-bold">👥 Gestión de Usuarios</h1>
+        <h1 className="text-2xl font-bold">👥 {t('users.title', 'Gestión de Usuarios')}</h1>
         <p className="mt-2 text-blue-100 dark:text-slate-300">
-          Administración de accesos al sistema Gemelo Digital.
+          {t('users.subtitle', 'Administración de accesos al sistema Gemelo Digital.')}
         </p>
       </div>
 
       {/* Panel Principal */}
       <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 transition-colors duration-200">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-100">Lista de Usuarios</h2>
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-100">{t('users.list_title', 'Lista de Usuarios')}</h2>
           <button 
             onClick={() => openModal()}
             className="bg-blue-600 dark:bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 text-sm font-medium transition-colors"
           >
-            + Nuevo Usuario
+            + {t('users.btn_new', 'Nuevo Usuario')}
           </button>
         </div>
 
@@ -145,19 +147,19 @@ export default function Usuarios() {
           <table className="w-full text-sm text-left text-gray-500 dark:text-slate-400">
             <thead className="text-xs text-gray-700 dark:text-slate-300 uppercase bg-gray-50 dark:bg-slate-900/50">
               <tr>
-                <th className="px-6 py-4 font-semibold">ID</th>
-                <th className="px-6 py-4 font-semibold">Usuario</th>
-                <th className="px-6 py-4 font-semibold">Email</th>
-                <th className="px-6 py-4 font-semibold">Rol</th>
-                <th className="px-6 py-4 font-semibold">Estado</th>
-                <th className="px-6 py-4 font-semibold text-right">Acciones</th>
+                <th className="px-6 py-4 font-semibold">{t('users.col_id', 'ID')}</th>
+                <th className="px-6 py-4 font-semibold">{t('users.col_username', 'Usuario')}</th>
+                <th className="px-6 py-4 font-semibold">{t('users.col_email', 'Email')}</th>
+                <th className="px-6 py-4 font-semibold">{t('users.col_role', 'Rol')}</th>
+                <th className="px-6 py-4 font-semibold">{t('users.col_status', 'Estado')}</th>
+                <th className="px-6 py-4 font-semibold text-right">{t('users.col_actions', 'Acciones')}</th>
               </tr>
             </thead>
             <tbody>
               {usuarios.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="px-6 py-8 text-center text-gray-400 dark:text-slate-500">
-                    {loading ? 'Cargando usuarios...' : 'No se encontraron usuarios.'}
+                    {loading ? t('users.loading', 'Cargando usuarios...') : t('users.no_users', 'No se encontraron usuarios.')}
                   </td>
                 </tr>
               ) : (
@@ -177,12 +179,12 @@ export default function Usuarios() {
                           ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
                           : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
                       }`}>
-                        {u.activo ? 'Activo' : 'Inactivo'}
+                        {u.activo ? t('users.status_active', 'Activo') : t('users.status_inactive', 'Inactivo')}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right space-x-3">
-                      <button onClick={() => openModal(u)} className="text-blue-600 dark:text-blue-400 hover:underline font-medium">Editar</button>
-                      <button onClick={() => handleDelete(u.id)} className="text-red-600 dark:text-red-400 hover:underline font-medium">Eliminar</button>
+                      <button onClick={() => openModal(u)} className="text-blue-600 dark:text-blue-400 hover:underline font-medium">{t('users.btn_edit', 'Editar')}</button>
+                      <button onClick={() => handleDelete(u.id)} className="text-red-600 dark:text-red-400 hover:underline font-medium">{t('users.btn_delete', 'Eliminar')}</button>
                     </td>
                   </tr>
                 ))
@@ -198,14 +200,14 @@ export default function Usuarios() {
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 dark:border-slate-700">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-700 flex justify-between items-center bg-gray-50 dark:bg-slate-900/50">
               <h3 className="text-lg font-bold text-gray-800 dark:text-slate-100">
-                {editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}
+                {editingUser ? t('users.modal_edit_title', 'Editar Usuario') : t('users.modal_new_title', 'Nuevo Usuario')}
               </h3>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl font-semibold">&times;</button>
             </div>
             
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Usuario</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">{t('users.col_username', 'Usuario')}</label>
                 <input 
                   type="text" name="username" required
                   value={formData.username} onChange={handleInputChange}
@@ -213,7 +215,7 @@ export default function Usuarios() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Email</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">{t('users.col_email', 'Email')}</label>
                 <input 
                   type="email" name="email" required
                   value={formData.email} onChange={handleInputChange}
@@ -222,7 +224,7 @@ export default function Usuarios() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-                  Contraseña {editingUser && <span className="text-xs text-gray-400 font-normal">(Dejar en blanco para mantener actual)</span>}
+                  {t('users.lbl_password', 'Contraseña')} {editingUser && <span className="text-xs text-gray-400 font-normal">({t('users.msg_leave_blank', 'Dejar en blanco para mantener actual')})</span>}
                 </label>
                 <input 
                   type="password" name="password" 
@@ -232,14 +234,14 @@ export default function Usuarios() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Rol</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">{t('users.col_role', 'Rol')}</label>
                   <select 
                     name="rol" value={formData.rol} onChange={handleInputChange}
                     className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-gray-300 dark:border-slate-600 rounded-md focus:ring-blue-500 p-2 border outline-none"
                   >
-                    <option value="Administrador">Administrador</option>
-                    <option value="Investigador">Investigador</option>
-                    <option value="Auditor">Auditor</option>
+                    <option value="Administrador">{t('users.role_admin', 'Administrador')}</option>
+                    <option value="Investigador">{t('users.role_researcher', 'Investigador')}</option>
+                    <option value="Auditor">{t('users.role_auditor', 'Auditor')}</option>
                   </select>
                 </div>
                 <div className="flex flex-col justify-end pb-2">
@@ -249,7 +251,7 @@ export default function Usuarios() {
                       checked={formData.activo} onChange={handleInputChange}
                       className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900"
                     />
-                    <span className="ml-2 text-sm font-medium text-gray-700 dark:text-slate-300">Usuario Activo</span>
+                    <span className="ml-2 text-sm font-medium text-gray-700 dark:text-slate-300">{t('users.lbl_active_user', 'Usuario Activo')}</span>
                   </label>
                 </div>
               </div>
@@ -265,13 +267,13 @@ export default function Usuarios() {
                   type="button" onClick={closeModal}
                   className="flex-1 px-4 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 rounded-md hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors font-medium"
                 >
-                  Cancelar
+                  {t('users.btn_cancel', 'Cancelar')}
                 </button>
                 <button 
                   type="submit" disabled={loading}
                   className="flex-1 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors font-medium disabled:opacity-50"
                 >
-                  {loading ? 'Guardando...' : 'Guardar Usuario'}
+                  {loading ? t('users.btn_saving', 'Guardando...') : t('users.btn_save_user', 'Guardar Usuario')}
                 </button>
               </div>
             </form>

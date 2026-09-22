@@ -14,12 +14,13 @@ export default function Layout() {
     i18n.changeLanguage(idioma);
   };
 
+  // 1. Aplicamos t() a los nombres del menú
   const menuItems = [
-    { name: 'Panel Principal', icon: Home, path: '/' },
-    { name: 'Simulación Escenarios', icon: Globe, path: '/simulacion' },
-    { name: 'Migración Especie', icon: Database, path: '/species-migration' },
-    { name: 'Reportes', icon: FileText, path: '/reportes' },
-    { name: 'Gestión Usuarios', icon: Users, path: '/usuarios', adminOnly: true },
+    { name: t('sidebar.main_panel', 'Panel Principal'), icon: Home, path: '/' },
+    { name: t('sidebar.scenarios', 'Simulación Escenarios'), icon: Globe, path: '/simulacion' },
+    { name: t('sidebar.migration', 'Migración Especie'), icon: Database, path: '/species-migration' },
+    { name: t('sidebar.reports', 'Reportes'), icon: FileText, path: '/reportes' },
+    { name: t('sidebar.users', 'Gestión Usuarios'), icon: Users, path: '/usuarios', adminOnly: true },
   ];
 
   const visibleMenuItems = menuItems.filter(item => 
@@ -32,12 +33,16 @@ export default function Layout() {
       <aside className="w-64 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col transition-colors duration-200">
         <div className="p-6 text-center border-b border-gray-100 dark:border-slate-700">
           <h2 className="text-xl font-bold text-blue-900 dark:text-blue-400">🌿 Gemelo Digital</h2>
-          <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Corredores de Migración</p>
+          {/* Traducimos el subtítulo del sistema */}
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">{t('sidebar.subtitle', 'Corredores de Migración')}</p>
         </div>
         
         <div className="p-4 bg-blue-50 dark:bg-slate-700 mx-4 mt-4 rounded-lg transition-colors">
           <p className="font-semibold text-sm text-gray-800 dark:text-slate-200">{user?.nombre_completo || user?.username}</p>
-          <p className="text-xs text-gray-600 dark:text-slate-400 capitalize">{user?.rol}</p>
+          {/* Traducimos el rol dinámicamente usando una función traductora para los roles */}
+          <p className="text-xs text-gray-600 dark:text-slate-400 capitalize">
+            {t(`roles.${user?.rol?.toLowerCase()}`, user?.rol)}
+          </p>
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
@@ -45,7 +50,7 @@ export default function Layout() {
             const Icon = item.icon;
             return (
               <NavLink
-                key={item.name}
+                key={item.path} // Cambiado a item.path para evitar problemas con la traducción dinámica
                 to={item.path}
                 className={({ isActive }) =>
                   isActive 
@@ -65,7 +70,8 @@ export default function Layout() {
           <div className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300">
             <div className="flex items-center">
               <Languages className="mr-3 h-5 w-5 opacity-70" />
-              <span>{i18n.language === 'en' ? 'Language' : 'Idioma'}</span>
+              {/* 2. Usamos t() en lugar del condicional manual */}
+              <span>{t('sidebar.language', 'Idioma')}</span>
             </div>
             <div className="flex gap-1 bg-gray-100 dark:bg-slate-900 p-1 rounded-md border border-gray-200 dark:border-slate-700">
               <button onClick={() => cambiarIdioma('es')} className={i18n.language === 'es' ? 'px-2 py-1 rounded text-xs font-bold transition-all bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-400' : 'px-2 py-1 rounded text-xs font-bold transition-all text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}>ES</button>
@@ -75,12 +81,15 @@ export default function Layout() {
 
           <button onClick={toggleTheme} className="flex w-full items-center px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
             {theme === 'dark' ? <Sun className="mr-3 h-5 w-5 text-amber-500" /> : <Moon className="mr-3 h-5 w-5 text-indigo-400" />}
-            <span className="ml-2">{theme === 'dark' ? (i18n.language === 'en' ? 'Light Mode' : 'Modo Claro') : (i18n.language === 'en' ? 'Dark Mode' : 'Modo Oscuro')}</span>
+            <span className="ml-2">
+              {/* 3. Usamos t() para los modos claro/oscuro */}
+              {theme === 'dark' ? t('sidebar.light_mode', 'Modo Claro') : t('sidebar.dark_mode', 'Modo Oscuro')}
+            </span>
           </button>
           
           <button onClick={logout} className="flex w-full items-center px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors">
             <LogOut className="mr-3 h-5 w-5" />
-            <span className="ml-2">{i18n.language === 'en' ? 'Log Out' : 'Cerrar Sesión'}</span>
+            <span className="ml-2">{t('sidebar.logout', 'Cerrar Sesión')}</span>
           </button>
         </div>
       </aside>

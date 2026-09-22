@@ -1,9 +1,23 @@
 {
   "sidebar": {
-    "dashboard": "Main Dashboard",
-    "habitat": "Habitat Models",
-    "migration": "Species Migration"
+    "main_panel": "Main Panel",
+    "scenarios": "Scenario Simulation",
+    "migration": "Species Migration",
+    "reports": "Reports",
+    "users": "User Management",
+    "dark_mode": "Dark Mode",
+    "light_mode": "Light Mode",
+    "language": "Language",
+    "logout": "Logout",
+    "subtitle": "Migration Corridors"
   },
+
+  "roles": {
+    "administrador": "Administrator",
+    "investigador": "Researcher",
+    "auditor": "Auditor"
+  },
+
   "migration": {
     "title": "🌿 Migration Prediction",
     "subtitle": "Climate Digital Twin",
@@ -65,5 +79,49 @@
     "static_design": "Static Design",
     "dynamic_design": "Dynamic Design",
     "no_data": "No data available to display."
+    },
+
+  "dashboard": {
+    "title": "🌿 Main Panel - Digital Twin",
+    "welcome": "Welcome,",
+    "role": "Role:",
+    "species": "🦋 Species",
+    "records": "📍 Presence Records",
+    "simulations": "🔬 Simulations",
+    "users": "👥 Active Users"
+  },
+
+  "users": {
+    "error_password_required": "Password is required for new users.",
+    "error_saving": "Error saving user.",
+    "confirm_delete": "Are you sure you want to delete this user?",
+    "error_deleting": "Error deleting user.",
+    "title": "User Management",
+    "subtitle": "Access administration for the Digital Twin system.",
+    "list_title": "User List",
+    "btn_new": "New User",
+    "col_id": "ID",
+    "col_username": "Username",
+    "col_email": "Email",
+    "col_role": "Role",
+    "col_status": "Status",
+    "col_actions": "Actions",
+    "loading": "Loading users...",
+    "no_users": "No users found.",
+    "status_active": "Active",
+    "status_inactive": "Inactive",
+    "btn_edit": "Edit",
+    "btn_delete": "Delete",
+    "modal_edit_title": "Edit User",
+    "modal_new_title": "New User",
+    "lbl_password": "Password",
+    "msg_leave_blank": "Leave blank to keep current",
+    "role_admin": "Administrator",
+    "role_researcher": "Researcher",
+    "role_auditor": "Auditor",
+    "lbl_active_user": "Active User",
+    "btn_cancel": "Cancel",
+    "btn_saving": "Saving...",
+    "btn_save_user": "Save User"
     }
 }

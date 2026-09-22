@@ -1,10 +1,5 @@
-"""
-Módulo de Generación de Reportes
-Gemelo Digital de Corredores de Migración
-
-Soporta formatos: PDF, Word (.docx), Excel (.xlsx)
-"""
-
+import os
+from groq import Groq
 import logging
 import json
 from pathlib import Path
@@ -47,6 +42,12 @@ from config import Config
 
 logger = logging.getLogger(__name__)
 
+# 1. Inicializar el cliente de Groq a nivel de módulo
+try:
+    groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+except Exception as e:
+    logger.warning(f"No se pudo inicializar Groq: {e}")
+    groq_client = None
 
 class ReportGenerator:
     """Generador de reportes en múltiples formatos"""
@@ -71,7 +72,56 @@ class ReportGenerator:
         """
         self.datos = datos_reporte
         self.fecha = datos_reporte.get('fecha_generacion', datetime.now())
+
+        self.idioma = datos_reporte.get('idioma', 'es')
+        self._traducir_textos_dinamicos()
     
+    def _traducir(self, texto_original: str) -> str:
+        """Método interno para traducir usando Groq"""
+        if self.idioma == "es" or not groq_client or not texto_original:
+            return texto_original
+            
+        idiomas = {"en": "inglés"}
+        idioma_dest = idiomas.get(self.idioma, "inglés")
+        
+        prompt = f"""Traduce el siguiente texto técnico sobre conectividad ecológica y cambio climático al {idioma_dest}. 
+        Mantén el tono formal y académico. Devuelve ÚNICAMENTE el texto traducido, sin introducciones ni comentarios adicionales.
+        
+        Texto a traducir:
+        {texto_original}"""
+
+        try:
+            chat_completion = groq_client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model="llama3-8b-8192", 
+                temperature=0.3,
+            )
+            return chat_completion.choices[0].message.content.strip()
+        except Exception as e:
+            logger.error(f"Error en la traducción con Groq: {e}")
+            return texto_original
+
+    def _traducir_textos_dinamicos(self):
+        """Sobrescribe los datos en memoria con sus versiones traducidas antes de generar los PDFs/Words"""
+        if self.idioma == "es":
+            return # No perdemos tiempo si es español
+            
+        logger.info("Traduciendo contenido dinámico del reporte...")
+        
+        # Traducimos el resumen ejecutivo
+        if 'resumen_ejecutivo' in self.datos:
+            self.datos['resumen_ejecutivo'] = self._traducir(self.datos['resumen_ejecutivo'])
+            
+        # Traducimos las recomendaciones (iterando la lista)
+        if 'recomendaciones' in self.datos:
+            self.datos['recomendaciones'] = [self._traducir(rec) for rec in self.datos['recomendaciones']]
+            
+        # Traducimos la conclusión (que generabas manualmente)
+        mejora = self.datos.get('mejora_promedio', 0)
+        hipotesis = self.datos.get('hipotesis_soportada', False)
+        conclusion_base = f"El análisis comparativo demuestra que la planificación adaptativa {'mejora significativamente' if hipotesis else 'presenta ventajas en'} la conectividad, alcanzando una mejora promedio del {mejora:.2f}%."
+        
+        self.datos['conclusion_traducida'] = self._traducir(conclusion_base)
     # =========================================================================
     # GENERACIÓN DE PDF
     # =========================================================================

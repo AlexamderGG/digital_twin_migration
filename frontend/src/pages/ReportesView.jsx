@@ -45,7 +45,7 @@ export default function ReportesView() {
     if (!id) return;
     setLoading(true);
     
-    // 1. Sintaxis corregida usando ${}
+    // 1. Cargar gráficos usando la interpolación correcta ${}
     try {
       const res = await api.get(`/reportes/preview/${id}?lang=${i18n.language}`);
       if (res.data.success) {
@@ -58,7 +58,7 @@ export default function ReportesView() {
       setPreviewData(null);
     }
 
-    // 2. Sintaxis corregida usando ${}
+    // 2. Cargar PDF usando la interpolación correcta ${}
     try {
       const pdfRes = await api.get(`/reportes/descargar/${id}?formato=pdf&lang=${i18n.language}`, {
         responseType: 'blob'
@@ -75,7 +75,7 @@ export default function ReportesView() {
   };
 
   const handleDownload = async (formato) => {
-    // 3. Sintaxis corregida usando ${}
+    // 3. Descarga de archivos usando la interpolación correcta ${}
     try {
       const res = await api.get(`/reportes/descargar/${selectedSim}?formato=${formato}&lang=${i18n.language}`, {
         responseType: 'blob' 
@@ -98,14 +98,14 @@ export default function ReportesView() {
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-slate-800 to-slate-600 dark:from-slate-900 dark:to-slate-800 rounded-xl p-6 text-white shadow-md transition-colors duration-200">
-        <h1 className="text-2xl font-bold">📄 {t('reports.title')}</h1>
-        <p className="mt-2 text-slate-200 dark:text-slate-400">{t('reports.subtitle')}</p>
+        <h1 className="text-2xl font-bold">📄 {t('reports.title', 'Generación de Reportes')}</h1>
+        <p className="mt-2 text-slate-200 dark:text-slate-400">{t('reports.subtitle', 'Exportación de resultados en formatos PDF, Word y Excel')}</p>
       </div>
 
       <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition-colors duration-200">
         
         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-          {t('reports.select_label')}
+          {t('reports.select_label', 'Seleccionar Simulación:')}
         </label>
         <select 
           value={selectedSim} 
@@ -114,42 +114,42 @@ export default function ReportesView() {
           className="w-full md:w-1/2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-emerald-500 dark:focus:ring-emerald-400 p-2 border mb-6 outline-none transition-colors disabled:opacity-50"
         >
           {simulaciones.length === 0 ? (
-            <option value="">{t('reports.no_simulations')}</option>
+            <option value="">{t('reports.no_simulations', 'No hay simulaciones disponibles')}</option>
           ) : (
             simulaciones.map(sim => (
               <option key={sim.id_simulacion} value={sim.id_simulacion}>
-                {sim.especie_nombre} - {t('reports.scenario')}: {sim.escenario} ({new Date(sim.fecha).toLocaleDateString()})
+                {sim.especie_nombre} - {t('reports.scenario', 'Escenario')}: {sim.escenario} ({new Date(sim.fecha).toLocaleDateString()})
               </option>
             ))
           )}
         </select>
 
         {loading ? (
-          <p className="text-center text-slate-500 dark:text-slate-400 py-10 animate-pulse">{t('reports.loading_preview')}</p>
+          <p className="text-center text-slate-500 dark:text-slate-400 py-10 animate-pulse">{t('reports.loading_preview', 'Cargando vista previa...')}</p>
         ) : previewData ? (
           <div className="space-y-8 animate-fadeIn">
             
             <div className="flex flex-wrap gap-4 pb-6 border-b border-gray-200 dark:border-slate-700 transition-colors">
               <button onClick={() => handleDownload('pdf')} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                📥 {t('reports.btn_pdf')}
+                📥 {t('reports.btn_pdf', 'Descargar PDF')}
               </button>
               <button onClick={() => handleDownload('word')} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                📥 {t('reports.btn_word')}
+                📥 {t('reports.btn_word', 'Descargar Word')}
               </button>
               <button onClick={() => handleDownload('excel')} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                📥 {t('reports.btn_excel')}
+                📥 {t('reports.btn_excel', 'Descargar Excel')}
               </button>
             </div>
 
             <div>
-              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-2">👁️ {t('reports.preview_summary')}</h3>
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-2">👁️ {t('reports.preview_summary', 'Resumen Ejecutivo')}</h3>
               <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50 rounded-lg text-slate-700 dark:text-slate-300 text-sm leading-relaxed transition-colors">
                 {previewData.resumen_ejecutivo}
               </div>
             </div>
 
             <div>
-              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-4">📈 {t('reports.preview_chart')}</h3>
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-4">📈 {t('reports.preview_chart', 'Evolución de la Conectividad')}</h3>
               <div className="h-80 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={previewData.metricas_temporales}>
@@ -161,15 +161,15 @@ export default function ReportesView() {
                       itemStyle={{ color: '#e2e8f0' }}
                     />
                     <Legend wrapperStyle={{ paddingTop: '10px' }}/>
-                    <Line type="monotone" dataKey="estatico_pc" stroke="#ef4444" name={t('reports.static_design')} strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                    <Line type="monotone" dataKey="dinamico_pc" stroke="#10b981" name={t('reports.dynamic_design')} strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="estatico_pc" stroke="#ef4444" name={t('reports.static_design', 'Diseño Estático')} strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="dinamico_pc" stroke="#10b981" name={t('reports.dynamic_design', 'Diseño Dinámico')} strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
             <div className="pt-6 border-t border-gray-200 dark:border-slate-700 transition-colors">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-4">📑 {t('reports.preview_pdf')}</h3>
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-4">📑 {t('reports.preview_pdf', 'Vista Previa del Documento')}</h3>
               <div className="w-full h-[700px] border border-gray-300 dark:border-slate-600 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-900 shadow-inner">
                 {pdfBlobUrl ? (
                   <iframe 
@@ -187,7 +187,7 @@ export default function ReportesView() {
 
           </div>
         ) : (
-          <p className="text-center text-slate-500 dark:text-slate-400 py-10">{t('reports.no_data')}</p>
+          <p className="text-center text-slate-500 dark:text-slate-400 py-10">{t('reports.no_data', 'No hay datos disponibles para mostrar.')}</p>
         )}
       </div>
     </div>
