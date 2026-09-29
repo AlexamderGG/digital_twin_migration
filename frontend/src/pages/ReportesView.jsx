@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import api from '../services/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +11,20 @@ export default function ReportesView() {
   const [previewData, setPreviewData] = useState(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const setIdSimulacionGlobal = useOutletContext();
+
+  useEffect(() => {
+    if (setIdSimulacionGlobal && selectedSim) {
+      setIdSimulacionGlobal(selectedSim);
+    }
+    
+    return () => {
+      if (setIdSimulacionGlobal) {
+        setIdSimulacionGlobal(null);
+      }
+    };
+  }, [selectedSim, setIdSimulacionGlobal]);
 
   useEffect(() => {
     const fetchSimulaciones = async () => {

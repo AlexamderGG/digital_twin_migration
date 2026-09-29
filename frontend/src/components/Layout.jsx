@@ -1,11 +1,13 @@
-import { useContext } from 'react';
+import { useState, useContext, } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import useDarkMode from '../hooks/useDarkMode';
 import { useTranslation } from 'react-i18next';
+import ChatBotGemelo from './ChatBotGemelo';
 import { Home, Database, Globe, FileText, Users, LogOut, Sun, Moon, Languages } from 'lucide-react';
 
 export default function Layout() {
+  const [idSimulacionGlobal, setIdSimulacionGlobal] = useState(null);
   const { user, logout } = useContext(AuthContext);
   const [theme, toggleTheme] = useDarkMode();
   const { t, i18n } = useTranslation(); 
@@ -50,7 +52,7 @@ export default function Layout() {
             const Icon = item.icon;
             return (
               <NavLink
-                key={item.path} // Cambiado a item.path para evitar problemas con la traducción dinámica
+                key={item.path}
                 to={item.path}
                 className={({ isActive }) =>
                   isActive 
@@ -94,8 +96,9 @@ export default function Layout() {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-8">
-        <Outlet />
+      <main className="flex-1 overflow-y-auto p-8 relative">      
+        <Outlet context={setIdSimulacionGlobal} />
+        <ChatBotGemelo idSimulacion={idSimulacionGlobal} />
       </main>
     </div>
   );

@@ -123,5 +123,14 @@
     "btn_cancel": "Cancel",
     "btn_saving": "Saving...",
     "btn_save_user": "Save User"
-    }
+    },
+
+  "chat": {
+    "title": "Ecological Assistant",
+    "subtitle": "Powered by Langflow & Groq",
+    "empty_state": "Ask about metrics, dynamic indices, or species data...",
+    "placeholder": "Type your question...",
+    "error_api": "The assistant encountered an internal error. Please try again.",
+    "error_network": "Could not connect to the LLM server."
+  }
 }

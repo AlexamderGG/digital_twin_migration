@@ -64,5 +64,13 @@
     "static_design": "Diseño Estático",
     "dynamic_design": "Diseño Dinámico",
     "no_data": "No hay datos disponibles para mostrar."
-    }
+    },
+  "chat": {
+    "title": "Asistente Ecológico",
+    "subtitle": "Impulsado por Langflow & Groq",
+    "empty_state": "Consulta métricas, índices dinámicos o datos de especies...",
+    "placeholder": "Escribe tu pregunta...",
+    "error_api": "El asistente encontró un error interno. Intenta de nuevo.",
+    "error_network": "No se pudo conectar con el servidor LLM."
+  }
 }

@@ -19,6 +19,13 @@ sqlalchemy>=2.0.29
 geoalchemy2>=0.14.6
 alembic>=1.13.1
 
+# Inteligencia Artificial y Agentes LLM (NUEVO)
+langchain>=0.1.13
+langchain-core>=0.1.33
+langchain-community>=0.0.29
+langchain-groq>=0.1.0
+httpx>=0.27.0
+
 # Procesamiento geoespacial
 geopandas>=0.14.3
 rasterio>=1.3.9

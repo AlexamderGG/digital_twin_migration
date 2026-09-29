@@ -17,9 +17,11 @@
     "react-dom": "^18.3.1",
     "react-i18next": "^17.0.15",
     "react-leaflet": "^4.2.1",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^6.22.3",
     "react-zoom-pan-pinch": "^4.2.0",
-    "recharts": "^2.12.3"
+    "recharts": "^2.12.3",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

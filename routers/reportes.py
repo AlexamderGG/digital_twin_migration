@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 from groq import Groq
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+import httpx
 import matplotlib
 matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
@@ -19,24 +21,35 @@ from reportlab.lib import colors
 from routers.auth import get_current_user_api
 from config import DatabaseConnection
 
+from langchain_community.agent_toolkits import SQLDatabaseToolkit, create_sql_agent
+from langchain_community.utilities import SQLDatabase
+from langchain_groq import ChatGroq
+from langchain_core.prompts import ChatPromptTemplate
+
+
 load_dotenv()
 router = APIRouter()
 
 # =====================================================================
-# INICIALIZACIÓN DE GROQ PARA TRADUCCIONES
+# INICIALIZACIÓN DE GROQ PARA TRADUCCIONES Y CONFIG LANGFLOW
 # =====================================================================
+LANGFLOW_BASE_URL = os.getenv("LANGFLOW_BASE_URL", "http://127.0.0.1:7861/api/v1/run/")
+LANGFLOW_FLOW_ID = os.getenv("LANGFLOW_FLOW_ID", "8b218691-e06c-4813-8aed-1ba259f55eaf")
+
 try:
     groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 except Exception as e:
     print(f"Advertencia: No se pudo inicializar Groq: {e}")
     groq_client = None
 
+class ChatRequest(BaseModel):
+    mensaje: str
+
 def traducir_contenido(texto: str, lang: str) -> str:
     """Traduce textos dinámicos con Groq de forma rápida y directa."""
     if lang.startswith("es") or not texto.strip():
         return texto
         
-    # Ahora Python sí o sí leerá el archivo .env actualizado
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         print("🚨 ERROR: No se encontró la variable GROQ_API_KEY")
@@ -347,3 +360,129 @@ def descargar_reporte(id_simulacion: int, formato: str = "pdf", lang: str = "es"
     except Exception as e:
         print(f"🔥 ERROR EN DESCARGA GENERAL: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# =====================================================================
+# 3. ENDPOINT UNIFICADO (Langflow + Langchain SQL Agent)
+# =====================================================================
+class ChatRequest(BaseModel):
+    mensaje: str
+    pantalla: str = "/"
+    id_simulacion: int | None = None 
+
+@router.post("/chat_unificado")
+async def chat_unificado(request: ChatRequest, current_user: dict = Depends(get_current_user_api)):
+    """Orquestador que decide si usar Langflow (RAG/Reportes) o Langchain (Consultas SQL)"""
+    print(f"📥 Chat ({request.pantalla}) | Usuario: {current_user.get('username')}: {request.mensaje}")
+    
+    # 1. MOTOR DE DECISIÓN MEJORADO (Insensible a mayúsculas/tildes)
+    mensaje_limpio = request.mensaje.lower()
+    
+    # Ampliamos las palabras clave para incluir variaciones sin tilde y términos comunes del dashboard
+    keywords_sql = [
+        "cuántas", "cuantas", "cuántos", "cuantos", 
+        "promedio", "total", "listar", "base de datos", 
+        "todos", "todas", "usuarios", "registrados", "registradas",
+        "tabla", "especies", "comparativa", "muéstrame", "información", "cuales"
+    ]
+    
+    requiere_sql_global = any(palabra in mensaje_limpio for palabra in keywords_sql)
+
+    # ---------------------------------------------------------
+    # RUTA A: LANGCHAIN (Agente SQL Nivel Global)
+    # ---------------------------------------------------------
+    if requiere_sql_global:
+        print("🔀 Enrutando petición a LANGCHAIN (Agente PostgreSQL)")
+        try:
+            db_url = os.getenv("DATABASE_URL") 
+            db = SQLDatabase.from_uri(db_url)
+            
+            # Usamos un modelo más rápido y con menos problemas de límites (Error 429) para SQL
+            llm = ChatGroq(
+                groq_api_key=os.getenv("GROQ_API_KEY"), 
+                model_name="qwen/qwen3.8-27b", # <--- Recomendado para SQL Agents
+                temperature=0,
+                max_tokens=800
+            )
+            
+            toolkit = SQLDatabaseToolkit(db=db, llm=llm)
+            
+            agente_sql = create_sql_agent(
+                llm=llm, 
+                toolkit=toolkit, 
+                agent_type="zero-shot-react-description", 
+                verbose=True
+            )
+            
+            resultado = agente_sql.invoke({"input": request.mensaje})
+            
+            return {"status": "success", "respuesta": resultado["output"]}
+            
+        except Exception as e:
+            print(f"🔥 Error en Langchain SQL Agent: {e}")
+            return {"status": "error", "respuesta": "Error al consultar la base de datos globalmente."}
+
+    # ---------------------------------------------------------
+    # RUTA B: LANGCHAIN PURO (Asistente Contextual / Reportes)
+    # ---------------------------------------------------------
+    print("🔀 Enrutando petición a LANGCHAIN (Asistente Contextual)")
+    
+    contexto_situacional = f"El usuario está navegando actualmente en la ruta: {request.pantalla} del sistema Gemelo Digital."
+    
+    if "usuarios" in request.pantalla:
+        contexto_situacional += " Esta es la sección de Gestión de Usuarios. Solo los administradores tienen acceso a la creación y modificación de roles y permisos."
+    elif "simulacion" in request.pantalla:
+        contexto_situacional += " Esta es la sección de configuración de Simulaciones de Escenarios Climáticos y variables de paisaje."
+    elif "species" in request.pantalla:
+        contexto_situacional += " Esta es la sección de Migración de Especies y base de datos taxonómica."
+    elif "reportes" in request.pantalla:
+        contexto_situacional += " Esta es la sección de Reportes y Resultados."
+        
+        if request.id_simulacion:
+            try:
+                sim_raw, resultados_raw = obtener_datos_simulacion(request.id_simulacion)
+                sim = dict(sim_raw._mapping) if hasattr(sim_raw, '_mapping') else dict(sim_raw)
+                resultados = [dict(r._mapping) if hasattr(r, '_mapping') else dict(r) for r in resultados_raw]
+                
+                contexto_situacional += f"""
+A continuación los datos exactos del reporte que está viendo:
+- Especie: {sim.get('nombre_comun')}
+- Escenario: {sim.get('nombre')}
+- Métricas anuales: {resultados}
+"""
+            except Exception as e:
+                print(f"⚠️ Aviso de contexto: {e}")
+
+    try:
+        # 1. Definimos la plantilla de personalidad y contexto
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", """Eres el 'Asistente Ecológico', la IA oficial del Gemelo Digital de Corredores de Migración.
+Utiliza el siguiente contexto del sistema para responder a la pregunta del usuario.
+Si el usuario te pide tablas o listas, usa formato Markdown.
+Si la respuesta no está en el contexto, usa tus conocimientos generales sobre ecología y software, pero aclara que no tienes el dato exacto del sistema.
+
+[CONTEXTO DEL SISTEMA]
+{contexto}"""),
+            ("user", "{pregunta}")
+        ])
+
+        # 2. Inicializamos el LLM (puedes seguir usando Qwen)
+        llm_conversacional = ChatGroq(
+            groq_api_key=os.getenv("GROQ_API_KEY"), 
+            model_name="qwen/qwen3.8-27b", 
+            temperature=0.3, 
+            max_tokens=1000
+        )
+
+        # 3. Creamos y ejecutamos la cadena (Chain)
+        cadena = prompt | llm_conversacional
+        
+        resultado_ia = cadena.invoke({
+            "contexto": contexto_situacional,
+            "pregunta": request.mensaje
+        })
+        
+        return {"status": "success", "respuesta": resultado_ia.content}
+
+    except Exception as e:
+        print(f"🔥 Error en Langchain Contextual: {e}")
+        return {"status": "error", "respuesta": "Hubo un problema al procesar tu solicitud conversacional."}
