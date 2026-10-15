@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 export default function Simulacion() {
   const { t } = useTranslation();
+  const VITE_API_URL = import.meta.env.VITE_API_URL || '';
   const [especies, setEspecies] = useState([]);
   const [selectedEspecie, setSelectedEspecie] = useState('');
   const [ssp, setSsp] = useState('SSP2-4.5');
