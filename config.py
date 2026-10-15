@@ -71,6 +71,15 @@ class Config:
     @classmethod
     def get_database_url(cls) -> str:
         """Retorna URL de conexión SQLAlchemy"""
+        # Si existe DATABASE_URL en Render, la usamos directamente
+        render_url = os.getenv('DATABASE_URL')
+        if render_url:
+            # Reemplazar postgres:// por postgresql:// si es necesario para SQLAlchemy
+            if render_url.startswith("postgres://"):
+                render_url = render_url.replace("postgres://", "postgresql://", 1)
+            return render_url
+
+        # De lo contrario, armamos la URL local
         return (
             f"postgresql+psycopg2://{cls.DB_USER}:{cls.DB_PASSWORD}"
             f"@{cls.DB_HOST}:{cls.DB_PORT}/{cls.DB_NAME}"
@@ -101,9 +110,10 @@ class DatabaseConnection:
                     pool_pre_ping=True,
                     pool_size=10,
                     max_overflow=20,
-                    echo=Config.DEBUG
+                    echo=Config.DEBUG,
+                    connect_args={"client_encoding": "utf8"} # <-- ¡SOLUCIÓN AÑADIDA AQUÍ!
                 )
-                logger.info("Motor de base de datos inicializado")
+                logger.info("Motor de base de datos inicializado (UTF-8 forzado)")
             except Exception as e:
                 logger.error(f"Error al crear motor de BD: {e}")
                 raise

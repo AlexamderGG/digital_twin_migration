@@ -3,6 +3,9 @@
 -- Esquema de Base de Datos PostgreSQL + PostGIS
 -- =============================================================================
 
+-- Crea la base de datos si no existe
+-- CREATE DATABASE IF NOT EXISTS digital_twin_migration;
+
 -- Habilitar extensiones necesarias
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS postgis_topology;
