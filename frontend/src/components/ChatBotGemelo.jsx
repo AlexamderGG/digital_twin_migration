@@ -36,7 +36,7 @@ export default function ChatBotGemelo({ idSimulacion = null }) {
         id_simulacion: idSimulacion ? Number(idSimulacion) : null
       };
       const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-      const response = await fetch(`${API_URL}/api/reportes/chat_unificado`, {
+      const response = await fetch(`${API_URL}/reportes/chat_unificado`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",

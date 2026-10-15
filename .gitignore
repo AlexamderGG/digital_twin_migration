@@ -24,10 +24,6 @@ yarn-error.log*
 *.db
 *.sqlite3
 
-# Archivos de modelos
-outputs/*.pkl
-*.pkl
-
 # Reportes generados
 reports/
 *.pdf
