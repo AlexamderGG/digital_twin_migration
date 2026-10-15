@@ -69,7 +69,6 @@ class Config:
     }
     
     @classmethod
-    @classmethod
     def get_database_url(cls) -> str:
         """Retorna URL de conexión SQLAlchemy"""
         render_url = os.getenv('DATABASE_URL')
@@ -81,7 +80,6 @@ class Config:
                 return render_url.replace("postgresql://", "postgresql+psycopg2://", 1)
             return render_url
 
-        # URL local
         return (
             f"postgresql+psycopg2://{cls.DB_USER}:{cls.DB_PASSWORD}"
             f"@{cls.DB_HOST}:{cls.DB_PORT}/{cls.DB_NAME}"
@@ -113,9 +111,9 @@ class DatabaseConnection:
                     pool_size=10,
                     max_overflow=20,
                     echo=Config.DEBUG,
-                    connect_args={"client_encoding": "utf8"} # <-- ¡SOLUCIÓN AÑADIDA AQUÍ!
+                    connect_args={"client_encoding": "utf8"}
                 )
-                logger.info("Motor de base de datos inicializado (UTF-8 forzado)")
+                logger.info("Motor de base de datos inicializado (UTF-8 y psycopg2)")
             except Exception as e:
                 logger.error(f"Error al crear motor de BD: {e}")
                 raise
@@ -141,7 +139,6 @@ class DatabaseConnection:
                 result = conn.execute(text("SELECT 1"))
                 result.fetchone()
                 
-                # Verificar PostGIS
                 result = conn.execute(text("SELECT PostGIS_version()"))
                 version = result.fetchone()[0]
                 logger.info(f"Conexión exitosa. PostGIS versión: {version}")
@@ -177,7 +174,6 @@ class DatabaseConnection:
         
         engine = cls.get_engine()
         
-        # Caso simple sin parámetros: usar read_postgis directamente
         if not params:
             return gpd.read_postgis(
                 sql=text(query),
@@ -186,27 +182,21 @@ class DatabaseConnection:
                 crs=crs or Config.DEFAULT_CRS
             )
         
-        # Con parámetros: estrategia robusta usando ST_AsEWKB + pandas.read_sql
         with engine.connect() as conn:
-            # Buscar patrón: "columna_original as alias_geom" en la consulta
-            # Ejemplo: "ubicacion as geometria"
             patron = re.compile(r'(\w+)\s+as\s+' + re.escape(geom_col), re.IGNORECASE)
             match = patron.search(query)
             
             if match:
                 col_original = match.group(1)
-                # Reemplazar para obtener geometría como WKB binario
                 query_wkb = query.replace(
                     f"{col_original} as {geom_col}",
                     f"ST_AsEWKB({col_original}) as {geom_col}_wkb"
                 )
                 
-                # Usar pandas.read_sql que maneja params correctamente
                 df = pd.read_sql(text(query_wkb), conn, params=params)
                 
                 wkb_col = f"{geom_col}_wkb"
                 if wkb_col in df.columns:
-                    # Decodificar WKB a objetos Shapely
                     geometrias = []
                     for g in df[wkb_col]:
                         if g is not None:
@@ -220,7 +210,6 @@ class DatabaseConnection:
                     df = df.drop(columns=[wkb_col])
                     return gpd.GeoDataFrame(df, geometry=geometrias, crs=crs or Config.DEFAULT_CRS)
             
-            # Fallback: si no encontramos el patrón, intentar read_postgis con bindparams
             try:
                 return gpd.read_postgis(
                     sql=text(query).bindparams(**params),
@@ -229,8 +218,6 @@ class DatabaseConnection:
                     crs=crs or Config.DEFAULT_CRS
                 )
             except Exception:
-                # Último recurso: interpolar params de forma segura para read_postgis
-                # (solo para tipos de datos simples: números, strings, fechas)
                 query_interpolada = query
                 for key, value in params.items():
                     if isinstance(value, str):
