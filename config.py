@@ -69,17 +69,19 @@ class Config:
     }
     
     @classmethod
+    @classmethod
     def get_database_url(cls) -> str:
         """Retorna URL de conexión SQLAlchemy"""
-        # Si existe DATABASE_URL en Render, la usamos directamente
         render_url = os.getenv('DATABASE_URL')
         if render_url:
-            # Reemplazar postgres:// por postgresql:// si es necesario para SQLAlchemy
+            # Forzar estrictamente el uso de psycopg2 en Render
             if render_url.startswith("postgres://"):
-                render_url = render_url.replace("postgres://", "postgresql://", 1)
+                return render_url.replace("postgres://", "postgresql+psycopg2://", 1)
+            elif render_url.startswith("postgresql://"):
+                return render_url.replace("postgresql://", "postgresql+psycopg2://", 1)
             return render_url
 
-        # De lo contrario, armamos la URL local
+        # URL local
         return (
             f"postgresql+psycopg2://{cls.DB_USER}:{cls.DB_PASSWORD}"
             f"@{cls.DB_HOST}:{cls.DB_PORT}/{cls.DB_NAME}"
