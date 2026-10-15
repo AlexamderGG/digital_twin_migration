@@ -192,7 +192,7 @@ export default function Simulacion() {
                         contentStyle={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}
                       >
                         <img 
-                          src={`http://localhost:8000${resultado.url_mapa_resultado}`} 
+                          src={`${VITE_API_URL.replace('/api', '')}${resultado.url_mapa_resultado}`} 
                           alt={t('simulation.map_alt')} 
                           className="max-w-full max-h-full object-contain pointer-events-none" 
                         />
