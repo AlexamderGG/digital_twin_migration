@@ -29,6 +29,7 @@ def obtener_historial_simulaciones(current_user: dict = Depends(get_current_user
                    s.fecha_inicio as fecha
             FROM simulaciones s
             LEFT JOIN especies e ON s.id_especie = e.id_especie
+            WHERE s.estado = 'completada'
             ORDER BY s.id_simulacion DESC
         """
         resultados = DatabaseConnection.execute_query(query)
@@ -59,14 +60,16 @@ def ejecutar_simulacion(req: SimulacionRequest, current_user: dict = Depends(get
         )
         resultados = simulador.ejecutar_comparacion()
         
+        id_simulacion = None
+        
         if resultados.get('success'):
             try:
                 engine = DatabaseConnection.get_engine()
                 with engine.begin() as conn:
                     
                     query_sim = text("""
-                        INSERT INTO simulaciones (id_especie, nombre, tipo, año_inicio, año_fin, fecha_inicio)
-                        VALUES (:id_esp, :ssp, 'comparativa', :a_inicio, :a_fin, CURRENT_TIMESTAMP)
+                        INSERT INTO simulaciones (id_especie, nombre, tipo, año_inicio, año_fin, fecha_inicio, estado)
+                        VALUES (:id_esp, :ssp, 'comparativa', :a_inicio, :a_fin, CURRENT_TIMESTAMP, 'completada')
                         RETURNING id_simulacion
                     """)
                     res_sim = conn.execute(query_sim, {
@@ -125,6 +128,7 @@ def ejecutar_simulacion(req: SimulacionRequest, current_user: dict = Depends(get
             return {
                 "success": True,
                 "data": {
+                    "id_simulacion": id_simulacion,
                     "mejora_pc_promedio": float(resultados.get('mejora_pc_promedio', 0.0)),
                     "hipotesis_soportada": bool(resultados.get('hipotesis_soportada', False)),
                     "especie": resultados.get('especie', 'Desconocida'),
