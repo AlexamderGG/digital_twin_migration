@@ -1,9 +1,8 @@
-// src/utils/exportarImagen.js
 import { toPng } from 'html-to-image';
 
 export const descargarElementoComoImagen = async (elementId, nombreArchivo) => {
   const element = document.getElementById(elementId);
-
+  
   if (!element) {
     console.error(`No se encontró el elemento con ID: ${elementId}`);
     return;
@@ -13,18 +12,20 @@ export const descargarElementoComoImagen = async (elementId, nombreArchivo) => {
   const scale = 6.25;
 
   try {
-    // toPng soporta oklch, variables CSS modernas y dark mode sin romperse
+    const width = element.offsetWidth;
+    const height = element.offsetHeight;
+
     const dataUrl = await toPng(element, {
-      pixelRatio: scale, 
-      backgroundColor: '#ffffff', // Fondo blanco para el artículo
+      pixelRatio: scale,
+      width: width,
+      height: height,
+      backgroundColor: '#ffffff',
       style: {
-        // Previene problemas de desalineación en pantallas con zoom
-        transform: 'scale(1)',
-        transformOrigin: 'top left'
+        margin: '0', 
+        transform: 'none'
       }
     });
 
-    // Crear el enlace y forzar la descarga
     const link = document.createElement('a');
     link.download = `${nombreArchivo}_600dpi.png`;
     link.href = dataUrl;

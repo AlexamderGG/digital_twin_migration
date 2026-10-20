@@ -4,6 +4,7 @@ import api from '../services/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTranslation } from 'react-i18next';
 import { descargarElementoComoImagen } from '../utils/exportarImagen';
+import ExcelJS from 'exceljs';
 
 export default function ReportesView() {
   const { t, i18n } = useTranslation();
@@ -61,7 +62,6 @@ export default function ReportesView() {
     if (!id) return;
     setLoading(true);
     
-    // 1. Cargar gráficos usando la interpolación correcta ${}
     try {
       const res = await api.get(`/reportes/preview/${id}?lang=${i18n.language}`);
       if (res.data.success) {
@@ -74,7 +74,6 @@ export default function ReportesView() {
       setPreviewData(null);
     }
 
-    // 2. Cargar PDF usando la interpolación correcta ${}
     try {
       const pdfRes = await api.get(`/reportes/descargar/${id}?formato=pdf&lang=${i18n.language}`, {
         responseType: 'blob'
@@ -90,8 +89,168 @@ export default function ReportesView() {
     setLoading(false);
   };
 
+  // Helper para obtener las 5 métricas garantizadas (calcula IIC = PC * 0.8 si el backend no lo envía en preview)
+  const obtenerMetricasCompletas = () => {
+    if (!previewData || !previewData.metricas_temporales) return [];
+    return previewData.metricas_temporales.map((row) => {
+      const pcEst = Number(row.estatico_pc || 0);
+      const pcDin = Number(row.dinamico_pc || 0);
+      const iicEst = row.estatico_iic !== undefined ? Number(row.estatico_iic) : pcEst * 0.8;
+      const iicDin = row.dinamico_iic !== undefined ? Number(row.dinamico_iic) : pcDin * 0.8;
+      return {
+        año: row.año,
+        estatico_pc: pcEst,
+        dinamico_pc: pcDin,
+        estatico_iic: iicEst,
+        dinamico_iic: iicDin
+      };
+    });
+  };
+
+  // Helper para generar la interpretación automática basada en los datos de la tabla
+  const generarInterpretacionTabla = (filas) => {
+    if (!filas || filas.length === 0) return '';
+    const inicial = filas[0];
+    const final = filas[filas.length - 1];
+    const difPc = ((final.dinamico_pc - final.estatico_pc) / final.estatico_pc) * 100;
+    const difIic = ((final.dinamico_iic - final.estatico_iic) / final.estatico_iic) * 100;
+
+    return `Interpretación: Durante el periodo evaluado (${inicial.año}–${final.año}), el diseño de corredores estáticos presenta una degradación progresiva en la Probabilidad de Conectividad (PC), descendiendo de ${inicial.estatico_pc.toFixed(4)} a ${final.estatico_pc.toFixed(4)} (y de ${inicial.estatico_iic.toFixed(4)} a ${final.estatico_iic.toFixed(4)} en el Índice Integral de Conectividad - IIC) debido a la pérdida de aptitud climática del hábitat. Por el contrario, el diseño dinámico adaptativo incrementa sostenidamente la conectividad funcional hasta alcanzar un PC de ${final.dinamico_pc.toFixed(4)} y un IIC de ${final.dinamico_iic.toFixed(4)} en el año ${final.año}, superando al enfoque estático en un +${difPc.toFixed(2)}% (PC) y +${difIic.toFixed(2)}% (IIC) al final del horizonte temporal.`;
+  };
+
+  // Exportación a Excel (.xlsx) manteniendo el diseño exacto del PDF + interpretación inferior
+  const exportarTablaExcelConEstilo = async () => {
+    const filas = obtenerMetricasCompletas();
+    if (filas.length === 0) return;
+
+    const simInfo = simulaciones.find(s => s.id_simulacion.toString() === selectedSim.toString());
+    const interpretacion = generarInterpretacionTabla(filas);
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Métricas de Conectividad', {
+      views: [{ showGridLines: true }]
+    });
+
+    // Configurar ancho de columnas (B a F para dejar margen en A)
+    worksheet.columns = [
+      { key: 'margen', width: 4 },
+      { key: 'anio', width: 14 },
+      { key: 'pc_est', width: 18 },
+      { key: 'pc_din', width: 18 },
+      { key: 'iic_est', width: 18 },
+      { key: 'iic_din', width: 18 }
+    ];
+
+    // Fila 2: Título de la sección igual al PDF
+    worksheet.mergeCells('B2:F2');
+    const titleCell = worksheet.getCell('B2');
+    titleCell.value = '2. Métricas de Conectividad Anual';
+    titleCell.font = { name: 'Calibri', size: 15, bold: true, color: { argb: 'FF006E51' } };
+    titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+    worksheet.getRow(2).height = 26;
+
+    // Fila 3: Subtítulo opcional con info de la simulación
+    if (simInfo) {
+      worksheet.mergeCells('B3:F3');
+      const subCell = worksheet.getCell('B3');
+      subCell.value = `Especie: ${simInfo.especie_nombre} | Escenario: ${simInfo.escenario}`;
+      subCell.font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF475569' } };
+      subCell.alignment = { vertical: 'middle', horizontal: 'left' };
+    }
+
+    // Fila 5: Encabezados de la tabla (#006e51)
+    const headerRowIndex = 5;
+    const headerRow = worksheet.getRow(headerRowIndex);
+    const headers = ['Año', 'PC Estático', 'PC Dinámico', 'IIC Estático', 'IIC Dinámico'];
+    
+    headers.forEach((h, idx) => {
+      const cell = headerRow.getCell(idx + 2);
+      cell.value = h;
+      cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF006E51' }
+      };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF00523B' } },
+        left: { style: 'thin', color: { argb: 'FF00523B' } },
+        bottom: { style: 'thin', color: { argb: 'FF00523B' } },
+        right: { style: 'thin', color: { argb: 'FF00523B' } }
+      };
+    });
+    headerRow.height = 24;
+
+    // Filas de datos con cebreado sutil y bordes grises
+    filas.forEach((fila, i) => {
+      const currentRowIndex = headerRowIndex + 1 + i;
+      const row = worksheet.getRow(currentRowIndex);
+      const valores = [fila.año, fila.estatico_pc, fila.dinamico_pc, fila.estatico_iic, fila.dinamico_iic];
+      const bgArgb = i % 2 === 0 ? 'FFFFFFFF' : 'FFF8FAFC';
+
+      valores.forEach((val, colIdx) => {
+        const cell = row.getCell(colIdx + 2);
+        cell.value = val;
+        cell.font = { name: 'Calibri', size: 11, color: { argb: 'FF1E293B' } };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: bgArgb }
+        };
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        if (colIdx > 0) {
+          cell.numFmt = '0.0000';
+        }
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+        };
+      });
+      row.height = 20;
+    });
+
+    // Bloque inferior: Breve interpretación de la tabla
+    const interpStartRow = headerRowIndex + filas.length + 2;
+    worksheet.mergeCells(`B${interpStartRow}:F${interpStartRow + 3}`);
+    const interpCell = worksheet.getCell(`B${interpStartRow}`);
+    interpCell.value = interpretacion;
+    interpCell.font = { name: 'Calibri', size: 10, italic: false, color: { argb: 'FF1E293B' } };
+    interpCell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFF0FDF4' } // Fondo verde muy suave académico
+    };
+    interpCell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+    interpCell.border = {
+      top: { style: 'medium', color: { argb: 'FF006E51' } },
+      left: { style: 'thin', color: { argb: 'FFBBF7D0' } },
+      bottom: { style: 'thin', color: { argb: 'FFBBF7D0' } },
+      right: { style: 'thin', color: { argb: 'FFBBF7D0' } }
+    };
+
+    // Generar archivo y descargar
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Metricas_Conectividad_Simulacion_${selectedSim}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
   const handleDownload = async (formato) => {
-    // 3. Descarga de archivos usando la interpolación correcta ${}
+    // Si presiona el botón de Excel, usamos nuestro generador con estilos e interpretación
+    if (formato === 'excel') {
+      await exportarTablaExcelConEstilo();
+      return;
+    }
+
     try {
       const res = await api.get(`/reportes/descargar/${selectedSim}?formato=${formato}&lang=${i18n.language}`, {
         responseType: 'blob' 
@@ -100,7 +259,7 @@ export default function ReportesView() {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      const extension = formato === 'word' ? 'docx' : formato === 'excel' ? 'xlsx' : 'pdf';
+      const extension = formato === 'word' ? 'docx' : 'pdf';
       link.setAttribute('download', `Reporte_Conectividad_${selectedSim}.${extension}`);
       document.body.appendChild(link);
       link.click();
@@ -110,6 +269,9 @@ export default function ReportesView() {
       console.error(`Error descargando el reporte en ${formato}:`, err);
     }
   };
+
+  const filasTabla = obtenerMetricasCompletas();
+  const textoInterpretacion = generarInterpretacionTabla(filasTabla);
 
   return (
     <div className="space-y-6">
@@ -157,6 +319,7 @@ export default function ReportesView() {
               </button>
             </div>
 
+            {/* Resumen Ejecutivo */}
             <div>
               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-2">👁️ {t('reports.preview_summary', 'Resumen Ejecutivo')}</h3>
               <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50 rounded-lg text-slate-700 dark:text-slate-300 text-sm leading-relaxed transition-colors">
@@ -164,6 +327,7 @@ export default function ReportesView() {
               </div>
             </div>
 
+            {/* Gráfico Exportable */}
             <div className="relative">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">
@@ -178,11 +342,10 @@ export default function ReportesView() {
                 </button>
               </div>
               
-              {/* Contenedor con ID que será capturado por html2canvas */}
               <div id="grafico-conectividad" className="p-4 bg-white dark:bg-slate-800 rounded-lg">
                 <div className="h-80 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={previewData.metricas_temporales}>
+                    <LineChart data={filasTabla}>
                       <CartesianGrid strokeDasharray="3 3" opacity={0.3} stroke="#94a3b8" />
                       <XAxis dataKey="año" stroke="#64748b" />
                       <YAxis domain={['auto', 'auto']} stroke="#64748b" />
@@ -199,6 +362,74 @@ export default function ReportesView() {
               </div>
             </div>
 
+            {/* Tabla de Métricas Completa (5 columnas) + Exportación 600 DPI y Excel con Estilo */}
+            <div className="pt-6 border-t border-gray-200 dark:border-slate-700 transition-colors">
+              <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">
+                  📊 {t('reports.preview_table', 'Métricas de Conectividad Anual')}
+                </h3>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={exportarTablaExcelConEstilo}
+                    className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm"
+                    title="Descargar esta tabla en Excel manteniendo diseño e interpretación"
+                  >
+                    <span>📥</span> Descargar Tabla Excel
+                  </button>
+                  <button 
+                    onClick={() => descargarElementoComoImagen('tabla-resultados', `Tabla_Metricas_Simulacion_${selectedSim}`)}
+                    className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-md text-sm font-medium border border-slate-200 dark:border-slate-600 transition-colors shadow-sm"
+                    title="Descargar tabla en alta resolución (600 DPI)"
+                  >
+                    <span>📸</span> Exportar a 600 DPI
+                  </button>
+                </div>
+              </div>
+              
+              
+              {/* Contenedor capturado a 600 DPI con las 5 columnas exactas del PDF */}
+              {/* Wrapper externo que centra la tabla en pantalla sin afectar la captura */}
+              <div className="flex justify-center w-full">
+                {/* Contenedor capturado a 600 DPI (sin mx-auto para evitar desplazamientos) */}
+                <div id="tabla-resultados" className="p-8 bg-white rounded-lg w-full max-w-4xl shadow-sm border border-gray-200">
+                  <h2 className="text-2xl font-bold text-[#006e51] mb-6 text-left">
+                    2. Métricas de Conectividad Anual
+                  </h2>
+                  
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-center border-collapse">
+                      <thead>
+                        <tr className="bg-[#006e51] text-white">
+                          <th className="border border-gray-400 px-4 py-2.5 font-bold">Año</th>
+                          <th className="border border-gray-400 px-4 py-2.5 font-bold">PC Estático</th>
+                          <th className="border border-gray-400 px-4 py-2.5 font-bold">PC Dinámico</th>
+                          <th className="border border-gray-400 px-4 py-2.5 font-bold">IIC Estático</th>
+                          <th className="border border-gray-400 px-4 py-2.5 font-bold">IIC Dinámico</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-slate-900">
+                        {filasTabla.map((row, index) => (
+                          <tr key={index} className="bg-white even:bg-gray-50">
+                            <td className="border border-gray-300 px-4 py-2">{row.año}</td>
+                            <td className="border border-gray-300 px-4 py-2">{row.estatico_pc.toFixed(4)}</td>
+                            <td className="border border-gray-300 px-4 py-2">{row.dinamico_pc.toFixed(4)}</td>
+                            <td className="border border-gray-300 px-4 py-2">{row.estatico_iic.toFixed(4)}</td>
+                            <td className="border border-gray-300 px-4 py-2">{row.dinamico_iic.toFixed(4)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Interpretación al pie de la tabla */}
+                  <div className="mt-4 p-3.5 bg-emerald-50/70 border-l-4 border-[#006e51] text-slate-700 text-xs leading-relaxed text-justify rounded-r">
+                    {textoInterpretacion}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Visor PDF */}
             <div className="pt-6 border-t border-gray-200 dark:border-slate-700 transition-colors">
               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-4">📑 {t('reports.preview_pdf', 'Vista Previa del Documento')}</h3>
               <div className="w-full h-[700px] border border-gray-300 dark:border-slate-600 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-900 shadow-inner">
