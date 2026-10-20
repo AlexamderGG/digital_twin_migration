@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import api from '../services/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTranslation } from 'react-i18next';
+import { descargarElementoComoImagen } from '../utils/exportarImagen';
 
 export default function ReportesView() {
   const { t, i18n } = useTranslation();
@@ -163,23 +164,38 @@ export default function ReportesView() {
               </div>
             </div>
 
-            <div>
-              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-4">📈 {t('reports.preview_chart', 'Evolución de la Conectividad')}</h3>
-              <div className="h-80 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={previewData.metricas_temporales}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} stroke="#94a3b8" />
-                    <XAxis dataKey="año" stroke="#64748b" />
-                    <YAxis domain={['auto', 'auto']} stroke="#64748b" />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc', borderRadius: '8px' }}
-                      itemStyle={{ color: '#e2e8f0' }}
-                    />
-                    <Legend wrapperStyle={{ paddingTop: '10px' }}/>
-                    <Line type="monotone" dataKey="estatico_pc" stroke="#ef4444" name={t('reports.static_design', 'Diseño Estático')} strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                    <Line type="monotone" dataKey="dinamico_pc" stroke="#10b981" name={t('reports.dynamic_design', 'Diseño Dinámico')} strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                  </LineChart>
-                </ResponsiveContainer>
+            <div className="relative">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">
+                  📈 {t('reports.preview_chart', 'Evolución de la Conectividad')}
+                </h3>
+                <button 
+                  onClick={() => descargarElementoComoImagen('grafico-conectividad', `Evolucion_Conectividad_Simulacion_${selectedSim}`)}
+                  className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-md text-sm font-medium border border-slate-200 dark:border-slate-600 transition-colors shadow-sm"
+                  title="Descargar gráfico en alta resolución"
+                >
+                  <span>📸</span> Exportar a 600 DPI
+                </button>
+              </div>
+              
+              {/* Contenedor con ID que será capturado por html2canvas */}
+              <div id="grafico-conectividad" className="p-4 bg-white dark:bg-slate-800 rounded-lg">
+                <div className="h-80 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={previewData.metricas_temporales}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} stroke="#94a3b8" />
+                      <XAxis dataKey="año" stroke="#64748b" />
+                      <YAxis domain={['auto', 'auto']} stroke="#64748b" />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc', borderRadius: '8px' }}
+                        itemStyle={{ color: '#e2e8f0' }}
+                      />
+                      <Legend wrapperStyle={{ paddingTop: '10px' }}/>
+                      <Line type="monotone" dataKey="estatico_pc" stroke="#ef4444" name={t('reports.static_design', 'Diseño Estático')} strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} isAnimationActive={false} />
+                      <Line type="monotone" dataKey="dinamico_pc" stroke="#10b981" name={t('reports.dynamic_design', 'Diseño Dinámico')} strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} isAnimationActive={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
 

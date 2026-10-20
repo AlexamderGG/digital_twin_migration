@@ -4,10 +4,11 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import api from '../services/api';
 import { useTranslation } from 'react-i18next';
+import { descargarElementoComoImagen } from '../utils/exportarImagen';
 
 const createCentroidIcon = (color) => L.divIcon({
   className: 'custom-centroid-marker',
-  html: `<div style="background-color: ${color}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.5);"<]</div>`,
+  html: `<div style="background-color: ${color}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.5);"></div>`,
   iconSize: [14, 14],
   iconAnchor: [7, 7]
 });
@@ -196,11 +197,20 @@ export default function SpeciesMigrationView() {
                 </span>
               </div>
             </div>
+            
+            {/* Nuevo botón para exportar el mapa */}
+            <button
+              onClick={() => descargarElementoComoImagen('mapa-migracion-container', `Mapa_Migracion_${selectedEspecie}`)}
+              className="w-full mt-2 py-2 flex items-center justify-center gap-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium rounded-lg shadow-sm transition"
+            >
+              <span>📸</span> Exportar Mapa (600 DPI)
+            </button>
           </div>
         )}
       </div>
 
-      <div className="flex-1 h-full relative z-0">
+      {/* ID asignado al contenedor del mapa interactivo */}
+      <div id="mapa-migracion-container" className="flex-1 h-full relative z-0 bg-gray-100 dark:bg-gray-800">
         <MapContainer center={[-9.19, -75.01]} zoom={5} className="w-full h-full">
           <TileLayer
             attribution='© OpenStreetMap'

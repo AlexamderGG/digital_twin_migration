@@ -527,8 +527,11 @@ class ScenarioSimulator:
         plt.axis('off')
 
         # Recortamos el blanco sobrante (bbox_inches='tight') y aumentamos la calidad para el frontend
-        plt.savefig(ruta_fisica, bbox_inches='tight', pad_inches=0.05, dpi=300, transparent=True)
-        plt.close(fig)
+        # plt.savefig(ruta_fisica, bbox_inches='tight', pad_inches=0.05, dpi=300, transparent=True)
+        # plt.close(fig)
+        # return ruta_web
+        plt.savefig(ruta_fisica, bbox_inches='tight', pad_inches=0.05, dpi=600, facecolor='white', transparent=False)
+        plt.close(fig)      
         return ruta_web
     
     def ejecutar_comparacion(self, progress_callback=None) -> Dict[str, Any]:

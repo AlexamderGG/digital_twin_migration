@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../services/api'; 
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { useTranslation } from 'react-i18next';
+import { descargarElementoComoImagen } from '../utils/exportarImagen';
 
 export default function Simulacion() {
   const { t } = useTranslation();
@@ -152,12 +153,23 @@ export default function Simulacion() {
               <p>{t('simulation.processing')}</p>
             </div>
           ) : resultado ? (
-            <div className={`w-full p-8 rounded-xl border-l-4 transition-colors ${
+            // Agregado id="panel-resultados" y relative para posicionar el botón
+            <div id="panel-resultados" className={`relative w-full p-8 rounded-xl border-l-4 transition-colors ${
               resultado.hipotesis_soportada 
                 ? 'bg-green-50 dark:bg-green-900/20 border-green-500' 
                 : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-500'
             }`}>
-              <h2 className={`text-2xl font-bold mb-2 ${
+              
+              {/* Botón de exportación a 600 DPI */}
+              <button 
+                onClick={() => descargarElementoComoImagen('panel-resultados', `Resultado_Simulacion_${resultado.especie}_${resultado.escenario}`)}
+                className="absolute top-6 right-6 flex items-center gap-2 bg-white hover:bg-gray-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-md text-sm font-medium border border-gray-200 dark:border-slate-600 transition-colors shadow-sm z-10"
+                title="Descargar panel completo en alta resolución"
+              >
+                <span>📸</span> Exportar a 600 DPI
+              </button>
+
+              <h2 className={`text-2xl font-bold mb-2 pr-40 ${
                 resultado.hipotesis_soportada ? 'text-green-700 dark:text-green-400' : 'text-yellow-700 dark:text-yellow-400'
               }`}>
                 {resultado.hipotesis_soportada ? t('simulation.hypothesis_supported') : t('simulation.partial_result')}
@@ -175,7 +187,7 @@ export default function Simulacion() {
               </div>
               
               {resultado.url_mapa_resultado && (
-                <div className="mt-6 flex flex-col items-center w-full">
+                <div className="mt-6 flex flex-col items-center w-full bg-white dark:bg-slate-800 p-2 rounded-xl">
                   <p className="text-sm text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-2">
                     <span>🔍</span> {t('simulation.map_instructions')}
                   </p>
