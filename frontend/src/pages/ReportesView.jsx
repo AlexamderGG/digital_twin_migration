@@ -15,6 +15,7 @@ export default function ReportesView() {
   const [loading, setLoading] = useState(false);
 
   const setIdSimulacionGlobal = useOutletContext();
+  const isEn = i18n.language && i18n.language.startsWith('en');
 
   useEffect(() => {
     if (setIdSimulacionGlobal && selectedSim) {
@@ -89,6 +90,28 @@ export default function ReportesView() {
     setLoading(false);
   };
 
+  // Textos bilingües para la tabla y la exportación a Excel
+  const tableLabels = {
+    sectionTitle: t(
+      'reports.table_section_title',
+      isEn ? '2. Annual Connectivity Metrics' : '2. Métricas de Conectividad Anual'
+    ),
+    previewTitle: t(
+      'reports.preview_table',
+      isEn ? 'Annual Connectivity Metrics' : 'Métricas de Conectividad Anual'
+    ),
+    sheetName: isEn ? 'Connectivity Metrics' : 'Métricas de Conectividad',
+    colYear: t('reports.col_year', isEn ? 'Year' : 'Año'),
+    colPcStatic: t('reports.col_pc_static', isEn ? 'Static PC' : 'PC Estático'),
+    colPcDynamic: t('reports.col_pc_dynamic', isEn ? 'Dynamic PC' : 'PC Dinámico'),
+    colIicStatic: t('reports.col_iic_static', isEn ? 'Static IIC' : 'IIC Estático'),
+    colIicDynamic: t('reports.col_iic_dynamic', isEn ? 'Dynamic IIC' : 'IIC Dinámico'),
+    btnExport600: t('reports.btn_export_600', isEn ? 'Export at 600 DPI' : 'Exportar a 600 DPI'),
+    btnExportExcelTable: t('reports.btn_export_table_excel', isEn ? 'Download Excel Table' : 'Descargar Tabla Excel'),
+    speciesLabel: t('reports.species_label', isEn ? 'Species' : 'Especie'),
+    scenarioLabel: t('reports.scenario', isEn ? 'Scenario' : 'Escenario')
+  };
+
   // Helper para obtener las 5 métricas garantizadas (calcula IIC = PC * 0.8 si el backend no lo envía en preview)
   const obtenerMetricasCompletas = () => {
     if (!previewData || !previewData.metricas_temporales) return [];
@@ -107,7 +130,7 @@ export default function ReportesView() {
     });
   };
 
-  // Helper para generar la interpretación automática basada en los datos de la tabla
+  // Helper para generar la interpretación automática en ES o EN según el idioma activo
   const generarInterpretacionTabla = (filas) => {
     if (!filas || filas.length === 0) return '';
     const inicial = filas[0];
@@ -115,10 +138,14 @@ export default function ReportesView() {
     const difPc = ((final.dinamico_pc - final.estatico_pc) / final.estatico_pc) * 100;
     const difIic = ((final.dinamico_iic - final.estatico_iic) / final.estatico_iic) * 100;
 
+    if (isEn) {
+      return `Interpretation: Over the evaluated period (${inicial.año}–${final.año}), the static corridor design exhibits a progressive degradation in the Probability of Connectivity (PC), decreasing from ${inicial.estatico_pc.toFixed(4)} to ${final.estatico_pc.toFixed(4)} (and from ${inicial.estatico_iic.toFixed(4)} to ${final.estatico_iic.toFixed(4)} in the Integral Index of Connectivity - IIC) due to climate-driven habitat suitability loss. Conversely, the adaptive dynamic design steadily increases functional connectivity, reaching a PC of ${final.dinamico_pc.toFixed(4)} and an IIC of ${final.dinamico_iic.toFixed(4)} by ${final.año}, outperforming the static approach by +${difPc.toFixed(2)}% (PC) and +${difIic.toFixed(2)}% (IIC) at the end of the time horizon.`;
+    }
+
     return `Interpretación: Durante el periodo evaluado (${inicial.año}–${final.año}), el diseño de corredores estáticos presenta una degradación progresiva en la Probabilidad de Conectividad (PC), descendiendo de ${inicial.estatico_pc.toFixed(4)} a ${final.estatico_pc.toFixed(4)} (y de ${inicial.estatico_iic.toFixed(4)} a ${final.estatico_iic.toFixed(4)} en el Índice Integral de Conectividad - IIC) debido a la pérdida de aptitud climática del hábitat. Por el contrario, el diseño dinámico adaptativo incrementa sostenidamente la conectividad funcional hasta alcanzar un PC de ${final.dinamico_pc.toFixed(4)} y un IIC de ${final.dinamico_iic.toFixed(4)} en el año ${final.año}, superando al enfoque estático en un +${difPc.toFixed(2)}% (PC) y +${difIic.toFixed(2)}% (IIC) al final del horizonte temporal.`;
   };
 
-  // Exportación a Excel (.xlsx) manteniendo el diseño exacto del PDF + interpretación inferior
+  // Exportación a Excel (.xlsx) bilingüe manteniendo el diseño exacto del PDF + interpretación inferior
   const exportarTablaExcelConEstilo = async () => {
     const filas = obtenerMetricasCompletas();
     if (filas.length === 0) return;
@@ -127,11 +154,10 @@ export default function ReportesView() {
     const interpretacion = generarInterpretacionTabla(filas);
 
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Métricas de Conectividad', {
+    const worksheet = workbook.addWorksheet(tableLabels.sheetName, {
       views: [{ showGridLines: true }]
     });
 
-    // Configurar ancho de columnas (B a F para dejar margen en A)
     worksheet.columns = [
       { key: 'margen', width: 4 },
       { key: 'anio', width: 14 },
@@ -141,19 +167,19 @@ export default function ReportesView() {
       { key: 'iic_din', width: 18 }
     ];
 
-    // Fila 2: Título de la sección igual al PDF
+    // Fila 2: Título de la sección
     worksheet.mergeCells('B2:F2');
     const titleCell = worksheet.getCell('B2');
-    titleCell.value = '2. Métricas de Conectividad Anual';
+    titleCell.value = tableLabels.sectionTitle;
     titleCell.font = { name: 'Calibri', size: 15, bold: true, color: { argb: 'FF006E51' } };
     titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
     worksheet.getRow(2).height = 26;
 
-    // Fila 3: Subtítulo opcional con info de la simulación
+    // Fila 3: Subtítulo con info de la simulación
     if (simInfo) {
       worksheet.mergeCells('B3:F3');
       const subCell = worksheet.getCell('B3');
-      subCell.value = `Especie: ${simInfo.especie_nombre} | Escenario: ${simInfo.escenario}`;
+      subCell.value = `${tableLabels.speciesLabel}: ${simInfo.especie_nombre} | ${tableLabels.scenarioLabel}: ${simInfo.escenario}`;
       subCell.font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF475569' } };
       subCell.alignment = { vertical: 'middle', horizontal: 'left' };
     }
@@ -161,7 +187,13 @@ export default function ReportesView() {
     // Fila 5: Encabezados de la tabla (#006e51)
     const headerRowIndex = 5;
     const headerRow = worksheet.getRow(headerRowIndex);
-    const headers = ['Año', 'PC Estático', 'PC Dinámico', 'IIC Estático', 'IIC Dinámico'];
+    const headers = [
+      tableLabels.colYear,
+      tableLabels.colPcStatic,
+      tableLabels.colPcDynamic,
+      tableLabels.colIicStatic,
+      tableLabels.colIicDynamic
+    ];
     
     headers.forEach((h, idx) => {
       const cell = headerRow.getCell(idx + 2);
@@ -182,7 +214,7 @@ export default function ReportesView() {
     });
     headerRow.height = 24;
 
-    // Filas de datos con cebreado sutil y bordes grises
+    // Filas de datos
     filas.forEach((fila, i) => {
       const currentRowIndex = headerRowIndex + 1 + i;
       const row = worksheet.getRow(currentRowIndex);
@@ -221,7 +253,7 @@ export default function ReportesView() {
     interpCell.fill = {
       type: 'pattern',
       pattern: 'solid',
-      fgColor: { argb: 'FFF0FDF4' } // Fondo verde muy suave académico
+      fgColor: { argb: 'FFF0FDF4' }
     };
     interpCell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
     interpCell.border = {
@@ -231,13 +263,13 @@ export default function ReportesView() {
       right: { style: 'thin', color: { argb: 'FFBBF7D0' } }
     };
 
-    // Generar archivo y descargar
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `Metricas_Conectividad_Simulacion_${selectedSim}.xlsx`);
+    const prefix = isEn ? 'Connectivity_Metrics_Simulation' : 'Metricas_Conectividad_Simulacion';
+    link.setAttribute('download', `${prefix}_${selectedSim}_${i18n.language}.xlsx`);
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -245,7 +277,6 @@ export default function ReportesView() {
   };
 
   const handleDownload = async (formato) => {
-    // Si presiona el botón de Excel, usamos nuestro generador con estilos e interpretación
     if (formato === 'excel') {
       await exportarTablaExcelConEstilo();
       return;
@@ -334,11 +365,10 @@ export default function ReportesView() {
                   📈 {t('reports.preview_chart', 'Evolución de la Conectividad')}
                 </h3>
                 <button 
-                  onClick={() => descargarElementoComoImagen('grafico-conectividad', `Evolucion_Conectividad_Simulacion_${selectedSim}`)}
+                  onClick={() => descargarElementoComoImagen('grafico-conectividad', `Evolucion_Conectividad_Simulacion_${selectedSim}_${i18n.language}`)}
                   className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-md text-sm font-medium border border-slate-200 dark:border-slate-600 transition-colors shadow-sm"
-                  title="Descargar gráfico en alta resolución"
                 >
-                  <span>📸</span> Exportar a 600 DPI
+                  <span>📸</span> {tableLabels.btnExport600}
                 </button>
               </div>
               
@@ -354,57 +384,52 @@ export default function ReportesView() {
                         itemStyle={{ color: '#e2e8f0' }}
                       />
                       <Legend wrapperStyle={{ paddingTop: '10px' }}/>
-                      <Line type="monotone" dataKey="estatico_pc" stroke="#ef4444" name={t('reports.static_design', 'Diseño Estático')} strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} isAnimationActive={false} />
-                      <Line type="monotone" dataKey="dinamico_pc" stroke="#10b981" name={t('reports.dynamic_design', 'Diseño Dinámico')} strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} isAnimationActive={false} />
+                      <Line type="monotone" dataKey="estatico_pc" stroke="#ef4444" name={t('reports.static_design', isEn ? 'Static Design' : 'Diseño Estático')} strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} isAnimationActive={false} />
+                      <Line type="monotone" dataKey="dinamico_pc" stroke="#10b981" name={t('reports.dynamic_design', isEn ? 'Dynamic Design' : 'Diseño Dinámico')} strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} isAnimationActive={false} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
               </div>
             </div>
 
-            {/* Tabla de Métricas Completa (5 columnas) + Exportación 600 DPI y Excel con Estilo */}
+            {/* Tabla de Métricas Completa (5 columnas) Bilingüe + Exportación 600 DPI y Excel */}
             <div className="pt-6 border-t border-gray-200 dark:border-slate-700 transition-colors">
               <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
                 <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">
-                  📊 {t('reports.preview_table', 'Métricas de Conectividad Anual')}
+                  📊 {tableLabels.previewTitle}
                 </h3>
                 <div className="flex items-center gap-2">
                   <button 
                     onClick={exportarTablaExcelConEstilo}
                     className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm"
-                    title="Descargar esta tabla en Excel manteniendo diseño e interpretación"
                   >
-                    <span>📥</span> Descargar Tabla Excel
+                    <span>📥</span> {tableLabels.btnExportExcelTable}
                   </button>
                   <button 
-                    onClick={() => descargarElementoComoImagen('tabla-resultados', `Tabla_Metricas_Simulacion_${selectedSim}`)}
+                    onClick={() => descargarElementoComoImagen('tabla-resultados', `Tabla_Metricas_Simulacion_${selectedSim}_${i18n.language}`)}
                     className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-md text-sm font-medium border border-slate-200 dark:border-slate-600 transition-colors shadow-sm"
-                    title="Descargar tabla en alta resolución (600 DPI)"
                   >
-                    <span>📸</span> Exportar a 600 DPI
+                    <span>📸</span> {tableLabels.btnExport600}
                   </button>
                 </div>
               </div>
               
-              
-              {/* Contenedor capturado a 600 DPI con las 5 columnas exactas del PDF */}
-              {/* Wrapper externo que centra la tabla en pantalla sin afectar la captura */}
+              {/* Wrapper externo que centra la tabla en pantalla sin afectar la captura 600 DPI */}
               <div className="flex justify-center w-full">
-                {/* Contenedor capturado a 600 DPI (sin mx-auto para evitar desplazamientos) */}
                 <div id="tabla-resultados" className="p-8 bg-white rounded-lg w-full max-w-4xl shadow-sm border border-gray-200">
                   <h2 className="text-2xl font-bold text-[#006e51] mb-6 text-left">
-                    2. Métricas de Conectividad Anual
+                    {tableLabels.sectionTitle}
                   </h2>
                   
                   <div className="overflow-x-auto">
                     <table className="w-full text-center border-collapse">
                       <thead>
                         <tr className="bg-[#006e51] text-white">
-                          <th className="border border-gray-400 px-4 py-2.5 font-bold">Año</th>
-                          <th className="border border-gray-400 px-4 py-2.5 font-bold">PC Estático</th>
-                          <th className="border border-gray-400 px-4 py-2.5 font-bold">PC Dinámico</th>
-                          <th className="border border-gray-400 px-4 py-2.5 font-bold">IIC Estático</th>
-                          <th className="border border-gray-400 px-4 py-2.5 font-bold">IIC Dinámico</th>
+                          <th className="border border-gray-400 px-4 py-2.5 font-bold">{tableLabels.colYear}</th>
+                          <th className="border border-gray-400 px-4 py-2.5 font-bold">{tableLabels.colPcStatic}</th>
+                          <th className="border border-gray-400 px-4 py-2.5 font-bold">{tableLabels.colPcDynamic}</th>
+                          <th className="border border-gray-400 px-4 py-2.5 font-bold">{tableLabels.colIicStatic}</th>
+                          <th className="border border-gray-400 px-4 py-2.5 font-bold">{tableLabels.colIicDynamic}</th>
                         </tr>
                       </thead>
                       <tbody className="text-slate-900">
@@ -421,7 +446,7 @@ export default function ReportesView() {
                     </table>
                   </div>
 
-                  {/* Interpretación al pie de la tabla */}
+                  {/* Interpretación bilingüe al pie de la tabla */}
                   <div className="mt-4 p-3.5 bg-emerald-50/70 border-l-4 border-[#006e51] text-slate-700 text-xs leading-relaxed text-justify rounded-r">
                     {textoInterpretacion}
                   </div>
