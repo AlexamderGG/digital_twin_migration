@@ -1,3 +1,6 @@
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../services/api';
@@ -6,6 +9,12 @@ import { useTranslation } from 'react-i18next';
 import { descargarElementoComoImagen } from '../utils/exportarImagen';
 import ExcelJS from 'exceljs';
 
+// Configuración obligatoria para el worker de react-pdf (compatible con Vite)
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
+
 export default function ReportesView() {
   const { t, i18n } = useTranslation();
   const [simulaciones, setSimulaciones] = useState([]);
@@ -13,6 +22,11 @@ export default function ReportesView() {
   const [previewData, setPreviewData] = useState(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // Estados exclusivos para react-pdf
+  const [numPages, setNumPages] = useState(null);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [pdfWidth, setPdfWidth] = useState(800);
 
   const setIdSimulacionGlobal = useOutletContext();
   const isEn = i18n.language && i18n.language.startsWith('en');
@@ -25,6 +39,16 @@ export default function ReportesView() {
       if (setIdSimulacionGlobal) setIdSimulacionGlobal(null);
     };
   }, [selectedSim, setIdSimulacionGlobal]);
+
+  // Actualizar el ancho del PDF si el usuario cambia el tamaño de la ventana
+  useEffect(() => {
+    const handleResize = () => {
+      setPdfWidth(Math.min(window.innerWidth - 60, 800));
+    };
+    handleResize(); // Primera vez
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const fetchSimulaciones = async () => {
@@ -64,10 +88,16 @@ export default function ReportesView() {
       const pdfRes = await api.get(`/reportes/descargar/${id}?formato=pdf&lang=${i18n.language}`, { responseType: 'blob' });
       if (pdfBlobUrl) window.URL.revokeObjectURL(pdfBlobUrl);
       setPdfBlobUrl(window.URL.createObjectURL(new Blob([pdfRes.data], { type: 'application/pdf' })));
+      setPageNumber(1); // Reiniciar a la página 1 cuando cambia el PDF
     } catch (err) {
       setPdfBlobUrl(null);
     }
     setLoading(false);
+  };
+
+  const onDocumentLoadSuccess = ({ numPages }) => {
+    setNumPages(numPages);
+    setPageNumber(1);
   };
 
   const tableLabels = {
@@ -114,7 +144,6 @@ export default function ReportesView() {
   };
 
   const exportarTablaExcelConEstilo = async () => {
-    // Lógica de exportación de ExcelJS idéntica a la anterior (omitido el desglose visual para no alargar innecesariamente, pero el código es igual)
     const filas = obtenerMetricasCompletas();
     if (filas.length === 0) return;
     const simInfo = simulaciones.find(s => s.id_simulacion.toString() === selectedSim.toString());
@@ -204,7 +233,7 @@ export default function ReportesView() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Header optimizado para móvil */}
+      {/* Header */}
       <div className="bg-gradient-to-r from-slate-800 to-slate-600 dark:from-slate-900 dark:to-slate-800 rounded-xl p-4 sm:p-6 text-white shadow-md transition-colors duration-200">
         <h1 className="text-xl sm:text-2xl font-bold">📄 {t('reports.title', 'Generación de Reportes')}</h1>
         <p className="mt-2 text-sm sm:text-base text-slate-200 dark:text-slate-400">{t('reports.subtitle', 'Exportación de resultados en formatos PDF, Word y Excel')}</p>
@@ -212,7 +241,7 @@ export default function ReportesView() {
 
       <div className="bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition-colors duration-200">
         
-        {/* Selector de Simulación responsivo */}
+        {/* Selector de Simulación */}
         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
           {t('reports.select_label', 'Seleccionar Simulación:')}
         </label>
@@ -238,7 +267,7 @@ export default function ReportesView() {
         ) : previewData ? (
           <div className="space-y-6 sm:space-y-8 animate-fadeIn">
             
-            {/* Botonera superior: Ancho completo apilados en móvil, en línea en PC */}
+            {/* Botonera superior */}
             <div className="flex flex-col sm:flex-row flex-wrap gap-3 pb-6 border-b border-gray-200 dark:border-slate-700">
               <button onClick={() => handleDownload('pdf')} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-lg font-medium transition-colors">
                 📥 {t('reports.btn_pdf', 'Descargar PDF')}
@@ -290,7 +319,7 @@ export default function ReportesView() {
               </div>
             </div>
 
-            {/* Tabla Responsive (Permite Scroll Horizontal en Móvil) */}
+            {/* Tabla Responsive */}
             <div className="pt-6 border-t border-gray-200 dark:border-slate-700">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4">
                 <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">
@@ -312,7 +341,6 @@ export default function ReportesView() {
                     {tableLabels.sectionTitle}
                   </h2>
                   
-                  {/* Wrapper para permitir el deslizamiento lateral en dispositivos estrechos sin romper el diseño */}
                   <div className="w-full overflow-x-auto pb-2">
                     <table className="w-full text-center border-collapse min-w-[600px]">
                       <thead>
@@ -345,15 +373,59 @@ export default function ReportesView() {
               </div>
             </div>
 
-            {/* Visor PDF Responsive */}
+            {/* Visor PDF NATIVO con react-pdf */}
             <div className="pt-6 border-t border-gray-200 dark:border-slate-700 transition-colors">
               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-4">📑 {t('reports.preview_pdf', 'Vista Previa del Documento')}</h3>
-              <div className="w-full h-[50vh] sm:h-[700px] border border-gray-300 dark:border-slate-600 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-900 shadow-inner">
+              
+              <div className="w-full min-h-[50vh] sm:min-h-[700px] border border-gray-300 dark:border-slate-600 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-900 shadow-inner flex flex-col items-center py-6 px-2">
                 {pdfBlobUrl ? (
-                  <iframe src={`${pdfBlobUrl}#toolbar=1&navpanes=0&view=FitH`} className="w-full h-full border-none" title="Visor PDF" />
+                  <div className="flex flex-col items-center w-full max-w-full overflow-x-auto">
+                    
+                    {/* Controles de Paginación */}
+                    <div className="flex justify-between items-center w-full max-w-md mb-6 px-4 bg-white dark:bg-slate-800 p-3 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
+                       <button
+                         disabled={pageNumber <= 1}
+                         onClick={() => setPageNumber(pageNumber - 1)}
+                         className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded font-medium disabled:opacity-50 transition-colors"
+                       >
+                         ◀ {t('reports.btn_prev', 'Anterior')}
+                       </button>
+                       <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                         {t('reports.page', 'Página')} {pageNumber} / {numPages || '-'}
+                       </p>
+                       <button
+                         disabled={pageNumber >= numPages}
+                         onClick={() => setPageNumber(pageNumber + 1)}
+                         className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded font-medium disabled:opacity-50 transition-colors"
+                       >
+                         {t('reports.btn_next', 'Siguiente')} ▶
+                       </button>
+                    </div>
+
+                    {/* Renderizado nativo del PDF */}
+                    <div className="border border-gray-300 dark:border-slate-600 shadow-xl bg-white max-w-full overflow-hidden">
+                      <Document
+                        file={pdfBlobUrl}
+                        onLoadSuccess={onDocumentLoadSuccess}
+                        loading={
+                          <div className="flex items-center justify-center p-20">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-600 dark:border-slate-400"></div>
+                          </div>
+                        }
+                      >
+                        <Page 
+                          pageNumber={pageNumber} 
+                          renderTextLayer={false} 
+                          renderAnnotationLayer={false}
+                          width={pdfWidth} 
+                        />
+                      </Document>
+                    </div>
+
+                  </div>
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-slate-600"></div>
+                  <div className="w-full h-full flex items-center justify-center py-20">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-slate-600 dark:border-slate-400"></div>
                   </div>
                 )}
               </div>

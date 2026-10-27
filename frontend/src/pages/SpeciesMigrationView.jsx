@@ -106,6 +106,13 @@ export default function SpeciesMigrationView() {
       const dataToSet = response.data.data ? response.data.data : response.data;
       setPredictionData(dataToSet);
 
+      // Scroll automático al mapa en móviles tras simular (opcional pero útil)
+      if (window.innerWidth < 1024) {
+        setTimeout(() => {
+          document.getElementById('mapa-migracion-container')?.scrollIntoView({ behavior: 'smooth' });
+        }, 300);
+      }
+
     } catch (err) {
       setError(err.response?.data?.detail || err.message || 'Error de conexión.');
     } finally {
@@ -114,10 +121,13 @@ export default function SpeciesMigrationView() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors duration-200">
-      <div className="w-full lg:w-96 p-6 bg-white dark:bg-slate-800 shadow-md z-10 flex flex-col gap-5 overflow-y-auto border-r border-transparent dark:border-slate-700 transition-colors duration-200">
+    // Modificado para que en móvil tome toda la altura y permita scroll (h-full min-h-screen)
+    <div className="flex flex-col lg:flex-row h-full lg:h-[calc(100vh-theme(spacing.20))] lg:min-h-0 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors duration-200 -m-4 sm:-m-6 lg:-m-8">
+      
+      {/* Panel lateral de controles */}
+      <div className="w-full lg:w-96 p-4 sm:p-6 bg-white dark:bg-slate-800 shadow-md lg:z-10 flex flex-col gap-4 sm:gap-5 overflow-y-visible lg:overflow-y-auto border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-slate-700 transition-colors duration-200">
         <div>
-          <h2 className="text-xl font-bold text-emerald-800 dark:text-emerald-500">{t('migration.title')}</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-emerald-800 dark:text-emerald-500">{t('migration.title')}</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">{t('migration.subtitle')}</p>
         </div>
 
@@ -149,7 +159,7 @@ export default function SpeciesMigrationView() {
           </select>
         </div>
 
-        <div className="bg-slate-100 dark:bg-slate-700/50 p-4 rounded-xl transition-colors">
+        <div className="bg-slate-100 dark:bg-slate-700/50 p-3 sm:p-4 rounded-xl transition-colors">
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm font-semibold dark:text-slate-200">{t('migration.temp_label')}</span>
             <span className={`text-sm font-extrabold ${deltaTemp >= 0 ? 'text-rose-600 dark:text-rose-400' : 'text-blue-600 dark:text-blue-400'}`}>
@@ -172,13 +182,13 @@ export default function SpeciesMigrationView() {
         </button>
         
         {error && (
-          <div className="mt-3 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 p-3 rounded-lg text-sm border border-rose-200 dark:border-rose-800">
+          <div className="mt-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 p-3 rounded-lg text-sm border border-rose-200 dark:border-rose-800">
             <strong>{t('migration.attention')}</strong> {error}
           </div>
         )}
 
         {predictionData && (
-          <div className="flex flex-col gap-3 mt-2 border-t dark:border-slate-700 pt-4 text-sm animate-fadeIn">
+          <div className="flex flex-col gap-3 mt-2 border-t border-gray-200 dark:border-slate-700 pt-4 text-sm animate-fadeIn">
             <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg">
               <span className="text-xs text-emerald-600 dark:text-emerald-500 font-bold uppercase block">
                 {t('migration.best_model')}
@@ -198,20 +208,19 @@ export default function SpeciesMigrationView() {
               </div>
             </div>
             
-            {/* Nuevo botón para exportar el mapa */}
             <button
               onClick={() => descargarElementoComoImagen('mapa-migracion-container', `Mapa_Migracion_${selectedEspecie}`)}
               className="w-full mt-2 py-2 flex items-center justify-center gap-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium rounded-lg shadow-sm transition"
             >
-              <span>📸</span> Exportar Mapa (600 DPI)
+              <span>📸</span> {t('reports.btn_export_600', 'Exportar Mapa (600 DPI)')}
             </button>
           </div>
         )}
       </div>
 
-      {/* ID asignado al contenedor del mapa interactivo */}
-      <div id="mapa-migracion-container" className="flex-1 h-full relative z-0 bg-gray-100 dark:bg-gray-800">
-        <MapContainer center={[-9.19, -75.01]} zoom={5} className="w-full h-full">
+      {/* Contenedor del mapa interactivo (Ocupa mínimo 60vh en móvil y flex-1 en PC) */}
+      <div id="mapa-migracion-container" className="flex-1 w-full min-h-[60vh] lg:min-h-0 relative z-0 bg-gray-100 dark:bg-gray-800">
+        <MapContainer center={[-9.19, -75.01]} zoom={5} className="w-full h-full z-0">
           <TileLayer
             attribution='© OpenStreetMap'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
